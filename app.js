@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let CFG = {}, ROSTERS = {}, PLAYERS = {}, TEMPLATE = null, MATCHES = [];
+let CFG = {}, ROSTERS = {}, PLAYERS = {}, TEMPLATE = null, MATCHES = [], ACTUAL_RESULTS = [];
 const state = { sets: [] };
 const OFFICIAL_TEAMS = ['Team1k', '외모지상주의', 'JD', 'Team최강파파', 'WorldClass', 'KHAN'];
 const TIERS = ['갓', '킹', '퀸', '잭', '스페이드', '조커', '히든'];
@@ -440,7 +440,7 @@ function parseMaps(rows){
   };
 
   // 1순위: '맵', 'MAP', 'map' 헤더가 있는 열만 먼저 읽기
-  const hi = headerRowIndex(rows);
+  const hi = findHeader(rows, 'map');
   const headers = (rows[hi] || []).map(displayName);
   const mapCols = headers
     .map((h, i) => (/^맵$|맵\s*이름|^map$/i.test(h) ? i : -1))
@@ -500,6 +500,212 @@ function predictedProb(homeName, awayName, mapName){
 }
 function pctColor(p){ p=Number(p)||0; if(p>=70)return CFG.colors.green; if(p>=55)return CFG.colors.yellow; if(p>=45)return CFG.colors.white; if(p>=30)return CFG.colors.orange; return CFG.colors.red; }
 
+
+function normalizeDate(v){
+  const s = displayName(v);
+  if(!s) return '';
+  const nums = s.match(/(\d{4})\D*(\d{1,2})\D*(\d{1,2})/);
+  if(nums) return `${nums[1]}.${String(+nums[2]).padStart(2,'0')}.${String(+nums[3]).padStart(2,'0')}`;
+  return s.replace(/-/g,'.').replace(/\s+/g,'');
+}
+function addActualResult({date='', set='', map='', p1='', p2='', winner='', loser='', source=''}){
+  p1=cleanPlayerName(p1); p2=cleanPlayerName(p2); winner=cleanPlayerName(winner); loser=cleanPlayerName(loser);
+  if(!winner && p1 && p2 && loser){ winner = playerKey(loser) === playerKey(p1) ? p2 : p1; }
+  if(!loser && p1 && p2 && winner){ loser = playerKey(winner) === playerKey(p1) ? p2 : p1; }
+  if(!p1 && winner) p1 = winner;
+  if(!p2 && loser) p2 = loser;
+  if(!isPlayerLike(winner) || !isPlayerLike(loser) || playerKey(winner)===playerKey(loser)) return false;
+  ACTUAL_RESULTS.push({
+    date: normalizeDate(date), set: displayName(set), map: displayName(map),
+    p1, p2, winner, loser,
+    p1k: playerKey(p1), p2k: playerKey(p2), winnerK: playerKey(winner), loserK: playerKey(loser),
+    pairKey: [playerKey(winner), playerKey(loser)].sort().join('|'), source
+  });
+  return true;
+}
+function rowsToActualResults(rows, sheetName){
+  const hi=findHeader(rows,'recent');
+  const headers=(rows[hi]||[]).map(displayName);
+  const dateI=colIndex(headers,[/^날짜$/,/일자/,/경기.*일/,/date/i],-1);
+  const setI=colIndex(headers,[/^set$/i,/세트/,/^SET$/],-1);
+  const mapI=colIndex(headers,[/^맵$/,/맵.*이름/,/map/i,/전장/],-1);
+  const winnerI=colIndex(headers,[/승자/,/승리.*선수/,/winner/i,/이긴/],-1);
+  const loserI=colIndex(headers,[/패자/,/패배.*선수/,/loser/i,/진/],-1);
+  const p1I=colIndex(headers,[/선수\s*1/,/선수.?1/,/player.?1/i,/^p1$/i,/home/i,/홈/],-1);
+  const p2I=colIndex(headers,[/선수\s*2/,/선수.?2/,/player.?2/i,/^p2$/i,/away/i,/어웨이/,/상대/],-1);
+  const resultI=colIndex(headers,[/^결과$/,/승패/,/result/i,/스코어/,/score/i],-1);
+  let count=0;
+  for(let r=hi+1;r<rows.length;r++){
+    const row=rows[r]||[];
+    const date=dateI>=0?row[dateI]:'';
+    const set=setI>=0?row[setI]:'';
+    const map=mapI>=0?row[mapI]:inferMap(row,headers);
+    let winner=winnerI>=0?row[winnerI]:'';
+    let loser=loserI>=0?row[loserI]:'';
+    let p1=p1I>=0?row[p1I]:'';
+    let p2=p2I>=0?row[p2I]:'';
+    const res=resultI>=0?displayName(row[resultI]):'';
+    if(!winner && !loser && p1 && p2 && res){
+      const nums=res.match(/(\d+)\D+(\d+)/);
+      if(nums){ const a=+nums[1], b=+nums[2]; if(a>b){ winner=p1; loser=p2; } else if(b>a){ winner=p2; loser=p1; } }
+      if(!winner && /1\s*승|p1|home|홈|선수1/i.test(res)){ winner=p1; loser=p2; }
+      if(!winner && /2\s*승|p2|away|어웨이|선수2/i.test(res)){ winner=p2; loser=p1; }
+    }
+    if(!winner || !loser){
+      const known=[];
+      row.forEach(cell=>splitTokens(cell).forEach(tok=>{ if(PLAYERS[playerKey(tok)] && !known.some(x=>playerKey(x)===playerKey(tok))) known.push(tok); }));
+      const line=row.map(displayName).join(' ');
+      const nums=line.match(/(\d+)\D+(\d+)/);
+      if(known.length>=2 && nums){ const a=+nums[1], b=+nums[2]; if(a>b){ winner=known[0]; loser=known[1]; } else if(b>a){ winner=known[1]; loser=known[0]; } }
+    }
+    if(addActualResult({date,set,map,p1,p2,winner,loser,source:sheetName})) count++;
+  }
+  return count;
+}
+function findActualFor(row){
+  const date=normalizeDate($('date')?.value||'');
+  const pair=[playerKey(row.hn), playerKey(row.an)].sort().join('|');
+  const mapK=normalize(row.map);
+  const candidates=ACTUAL_RESULTS.filter(a => a.pairKey===pair && (!date || !a.date || a.date===date));
+  if(!candidates.length) return null;
+  return candidates.find(a => mapK && normalize(a.map)===mapK) || candidates[0];
+}
+function verifyCurrentPredictions(){
+  const c=calc();
+  let checked=0, hit=0;
+  const lines=[];
+  c.rows.forEach(r=>{
+    const actual=findActualFor(r);
+    if(!actual){ lines.push(`${r.set}SET ${r.hn} vs ${r.an}: 결과 없음`); return; }
+    const predK = r.hp>=50 ? playerKey(r.hn) : playerKey(r.an);
+    const ok = predK === actual.winnerK;
+    checked++; if(ok) hit++;
+    lines.push(`${r.set}SET ${r.hn} vs ${r.an}: 예측 ${predK===playerKey(r.hn)?r.hn:r.an} ${ok?'✅':'❌'} / 실제 ${actual.winner}`);
+  });
+  const pct = checked ? Math.round(hit/checked*100) : 0;
+  const text = checked ? `검증 결과: ${hit}/${checked} 적중 (${pct}%)\n${lines.join('\n')}` : `검증 가능한 결과가 없습니다.\nS11PlayersResult 날짜/선수명/승자·패자 컬럼을 확인하세요.`;
+  const el=$('resultCheck'); if(el) el.textContent=text;
+  log(`예측 검증 완료\n${text}`, checked ? 'good' : 'warn');
+}
+
+
+function parseWLText(v){
+  const t = Array.isArray(v) ? v.join(' ') : displayName(v);
+  const m = t.match(/(\d+)\s*승\s*(\d+)\s*패/);
+  if(m) return {w:+m[1], l:+m[2], n:+m[1]+(+m[2]), rate:(+m[1]+1)/((+m[1])+(+m[2])+2)};
+  return {w:0,l:0,n:0,rate:0.5};
+}
+function recentRate(playerName){
+  const p=infoOf(playerName), g=p.recentGames||[];
+  const w=g.filter(x=>x==='W').length, l=g.filter(x=>x==='L').length, n=w+l;
+  return {w,l,n,rate:n?(w+1)/(n+2):0.5};
+}
+function h2hRaw(player, opponent){
+  const pk=playerKey(player), ok=playerKey(opponent);
+  let w=0,l=0;
+  MATCHES.forEach(m=>{
+    const involved = m.p1k===pk || m.p2k===pk;
+    const opp = m.p1k===ok || m.p2k===ok;
+    if(!involved || !opp) return;
+    if(m.winnerK===pk) w++; else l++;
+  });
+  const n=w+l;
+  return {w,l,n,rate:n?(w+1)/(n+2):0.5};
+}
+function raceRaw(player, opponent){
+  const pk=playerKey(player), oppRace=infoOf(opponent).race;
+  let w=0,l=0;
+  MATCHES.forEach(m=>{
+    const asP1=m.p1k===pk, asP2=m.p2k===pk;
+    if(!asP1 && !asP2) return;
+    const oppR=asP1?m.p2Race:m.p1Race;
+    if(!oppRace || oppRace==='-' || normalize(oppR)!==normalize(oppRace)) return;
+    if(m.winnerK===pk) w++; else l++;
+  });
+  const n=w+l;
+  return {w,l,n,rate:n?(w+1)/(n+2):0.5};
+}
+function sideName(diff, home, away){
+  if(Math.abs(diff) < 0.001) return '중립';
+  return diff > 0 ? home : away;
+}
+function factorSummary(r){
+  const h=r.h, a=r.a;
+  const eloDiff=(Number(h.elo)||1500)-(Number(a.elo)||1500);
+  const hr=recentRate(r.hn), ar=recentRate(r.an);
+  const hh=h2hRaw(r.hn,r.an), ah=h2hRaw(r.an,r.hn);
+  const hRace=raceRaw(r.hn,r.an), aRace=raceRaw(r.an,r.hn);
+  const hm=mapStatsRaw(r.hn,r.map), am=mapStatsRaw(r.an,r.map);
+  const mapAdj=mapAdjust(r.hn,r.an,r.map);
+  const base=prob(h.elo,a.elo);
+  return {
+    base, mapAdj,
+    factors:[
+      {name:'ELO', side:sideName(eloDiff,r.hn,r.an), note:`${h.elo} vs ${a.elo} (${eloDiff>0?'+':''}${eloDiff})`, strength:Math.min(3,Math.abs(eloDiff)/120)},
+      {name:'최근10', side:sideName(hr.rate-ar.rate,r.hn,r.an), note:`${hr.w}-${hr.l} vs ${ar.w}-${ar.l}`, strength:Math.min(3,Math.abs(hr.rate-ar.rate)*5)},
+      {name:'상대전적', side:sideName(hh.rate-ah.rate,r.hn,r.an), note:`${hh.w}-${hh.l} vs ${ah.w}-${ah.l}`, strength:hh.n+ah.n?Math.min(3,Math.abs(hh.rate-ah.rate)*5):0},
+      {name:'종족전적', side:sideName(hRace.rate-aRace.rate,r.hn,r.an), note:`${hRace.w}-${hRace.l} vs ${aRace.w}-${aRace.l}`, strength:hRace.n+aRace.n?Math.min(3,Math.abs(hRace.rate-aRace.rate)*5):0},
+      {name:'맵전적', side:sideName(hm.rate-am.rate,r.hn,r.an), note:`${r.map} ${hm.w}-${hm.l} vs ${am.w}-${am.l} / 보정 ${mapAdj>=0?'+':''}${mapAdj.toFixed(1)}%p`, strength:hm.n+am.n?Math.min(3,Math.abs(hm.rate-am.rate)*5):0}
+    ]
+  };
+}
+function confidenceBand(p){
+  p=Number(p)||50;
+  if(p>=75) return '강한 우세';
+  if(p>=65) return '우세';
+  if(p>=55) return '근소 우세';
+  return '박빙';
+}
+function buildAnalysisReport(){
+  const c=calc();
+  let checked=0, hit=0;
+  const bandStats={ '55~59':{h:0,n:0}, '60~69':{h:0,n:0}, '70+':{h:0,n:0}, '박빙':{h:0,n:0} };
+  const lines=[];
+  lines.push(`3050 예측 분석 리포트`);
+  lines.push(`${$('date').value} ${$('time').value}  ${c.ht} vs ${c.at}`);
+  lines.push(`데이터: S11Roaster / ELOrank / 경기기록 / S11PlayersResult`);
+  lines.push('');
+  c.rows.forEach(r=>{
+    const fs=factorSummary(r);
+    const predName = r.hp>=50 ? r.hn : r.an;
+    const predPct = Math.max(r.hp,r.ap);
+    const actual=findActualFor(r);
+    let result='결과 없음', ok=null;
+    if(actual){
+      ok = playerKey(predName)===actual.winnerK;
+      checked++; if(ok) hit++;
+      result = `실제 ${actual.winner} 승 ${ok?'✅ 적중':'❌ 실패'}`;
+      const key=predPct>=70?'70+':predPct>=60?'60~69':predPct>=55?'55~59':'박빙';
+      bandStats[key].n++; if(ok) bandStats[key].h++;
+    }
+    lines.push(`SET${r.set} · ${r.map}`);
+    lines.push(`예측: ${predName} ${predPct}% (${confidenceBand(predPct)}) / ${result}`);
+    lines.push(`기본 ELO확률: ${fs.base}% → 맵보정 후: ${r.hp}% : ${r.ap}%`);
+    lines.push(`근거:`);
+    fs.factors.forEach(f=>{
+      const mark = f.side==='중립' ? '·' : (f.side===predName ? '▲' : '▼');
+      lines.push(`  ${mark} ${f.name}: ${f.side} / ${f.note}`);
+    });
+    if(actual && !ok){
+      const supportsPred=fs.factors.filter(f=>f.side===predName).map(f=>f.name);
+      const supportsActual=fs.factors.filter(f=>f.side===actual.winner).map(f=>f.name);
+      lines.push(`오답 해석: 예측 근거(${supportsPred.join(', ')||'없음'})보다 실제 승자 우세 요인(${supportsActual.join(', ')||'없음'}) 또는 변수 영향이 컸을 가능성`);
+    }
+    lines.push('');
+  });
+  if(checked){
+    lines.push(`요약: ${hit}/${checked} 적중 (${Math.round(hit/checked*100)}%)`);
+    Object.entries(bandStats).forEach(([k,v])=>{ if(v.n) lines.push(`- ${k} 구간: ${v.h}/${v.n} 적중 (${Math.round(v.h/v.n*100)}%)`); });
+    lines.push('');
+    lines.push('※ 이 리포트는 현재 입력된 6세트 예측과 S11PlayersResult의 실제 결과를 비교합니다. 가중치는 자동 변경하지 않고, 누적 표본을 보고 사람이 조정하는 용도입니다.');
+  }else{
+    lines.push('요약: 현재 입력 경기와 매칭되는 실제 결과가 없습니다. 날짜/선수명/맵명이 S11PlayersResult와 맞는지 확인하세요.');
+  }
+  const text=lines.join('\n');
+  if($('analysisReport')) $('analysisReport').textContent=text;
+  log('분석 리포트 생성 완료', 'good');
+}
+
 async function syncMaps(report){
   let maps = [];
   if(CFG.mapSheet){
@@ -546,13 +752,19 @@ async function syncAll(){
     try{ const rows = await fetchSheet(sheet, CFG.sheetId); const c = rowsToRecent(rows, sheet); recentRows += c; report.push(`[최근10] ${sheet}: ${c}건`); }
     catch(e){ report.push(`[최근10] ${sheet}: 실패(${e.message})`); }
   }
+  ACTUAL_RESULTS = [];
+  let actualRows = 0;
+  for(const sheet of (CFG.actualResultSheets || [])){
+    try{ const rows = await fetchSheet(sheet, CFG.teamSheetId); const c = rowsToActualResults(rows, sheet); actualRows += c; report.push(`[예측검증] ${sheet}: ${c}건`); }
+    catch(e){ report.push(`[예측검증] ${sheet}: 실패(${e.message})`); }
+  }
   finalizeRecent();
   const rosterNames = Object.values(ROSTERS).flatMap(t => t.players || []);
   const keys = [...new Set(rosterNames.map(playerKey).filter(Boolean))];
   const missing = keys.filter(k => !PLAYERS[k]);
   const matched = keys.length - missing.length;
   const missingNames = missing.map(k => rosterNames.find(n => playerKey(n) === k) || k);
-  let msg = `동기화 완료\n${report.join('\n')}\n로스터 매칭: ${matched}/${keys.length}\n최근10 계산: ${recentRows}건`;
+  let msg = `동기화 완료\n${report.join('\n')}\n로스터 매칭: ${matched}/${keys.length}\n최근10 계산: ${recentRows}건\n검증결과 로딩: ${actualRows}건`;
   if(!rosterLoaded) msg += `\n경고: 선수DB가 로딩되지 않았습니다. '클랜원 전체명단' 탭 이름/권한 확인`;
   if(missing.length) msg += `\n미매칭(${missing.length}): ${missingNames.slice(0, 60).join(', ')}${missing.length>60?' ...':''}`;
   log(msg, missing.length ? 'warn' : 'good');
@@ -582,7 +794,7 @@ function buildUI(){
   document.querySelectorAll('select,input').forEach(e => e.addEventListener('change', () => { if(e.id==='homeTeam'||e.id==='awayTeam') updateTeamPlayers(); renderAll(); }));
   $('syncBtn').onclick = syncAll;
   $('reloadBtn').onclick = async () => { try{ log('S11Roaster 다시 읽는 중...'); const r=await syncTeamRosters(); log(`[팀 로스터]\n${r.join('\n')}`, 'good'); renderAll(); } catch(e){ log(`로스터 다시읽기 실패: ${e.message}`, 'warn'); } };
-  $('generateBtn').onclick = downloadImage;
+  $('generateBtn').onclick = downloadImage; if($('verifyBtn')) $('verifyBtn').onclick = verifyCurrentPredictions; if($('reportBtn')) $('reportBtn').onclick = buildAnalysisReport;
 }
 function updateTeamPlayers(){
   const ht=$('homeTeam')?.value, at=$('awayTeam')?.value;
@@ -608,7 +820,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV29: 선수별 맵 보정 적용`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV31: 분석리포트 + 결과검증 + 선수별 맵 보정`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
