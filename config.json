@@ -1,0 +1,28 @@
+{
+  "version": "V29_WebSite",
+  "sheetId": "1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs",
+  "teamSheetId": "1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE",
+  "teamRosterSheet": "S11Roaster",
+  "playerRosterSheets": ["클랜원 전체명단", "클랜원전체명단", "ClanMembers"],
+  "eloSheets": ["ELOrank"],
+  "resultSheets": ["(개인전)경기기록데이터", "ELOResult", "S11PlayerResult"],
+  "mapSheet": "MapDATA",
+  "template": "assets/MASTER_TEMPLATE.png",
+  "dateDefault": "2026.07.02",
+  "timeDefault": "19:00",
+  "boDefault": "Bo7",
+  "maps": ["투혼", "폴스타", "녹아웃", "매치포인트", "실피드", "옥타곤", "폴리포이드", "네오실피드", "라데온", "애티튜드"],
+  "aceTiers": ["갓", "킹", "퀸", "잭", "스페이드", "조커", "히든"],
+  "colors": {
+    "home": "#ff3b3b",
+    "away": "#31a8ff",
+    "white": "#f5f5f5",
+    "yellow": "#ffd84a",
+    "green": "#18d66b",
+    "orange": "#ff9f1a",
+    "red": "#ff3030",
+    "gray": "#cccccc"
+  },
+  "eloClampMin": 1,
+  "eloClampMax": 99
+}
