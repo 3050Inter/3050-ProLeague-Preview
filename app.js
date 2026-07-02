@@ -583,7 +583,7 @@ function verifyCurrentPredictions(){
     lines.push(`${r.set}SET ${r.hn} vs ${r.an}: 예측 ${predK===playerKey(r.hn)?r.hn:r.an} ${ok?'✅':'❌'} / 실제 ${actual.winner}`);
   });
   const pct = checked ? Math.round(hit/checked*100) : 0;
-  const text = checked ? `검증 결과: ${hit}/${checked} 적중 (${pct}%)\n${lines.join('\n')}` : `검증 가능한 결과가 없습니다.\nS11PlayerResult 날짜/선수명/승자·패자 컬럼을 확인하세요.`;
+  const text = checked ? `검증 결과: ${hit}/${checked} 적중 (${pct}%)\n${lines.join('\n')}` : `검증 가능한 결과가 없습니다.\nS11PlayersResult 날짜/선수명/승자·패자 컬럼을 확인하세요.`;
   const el=$('resultCheck'); if(el) el.textContent=text;
   log(`예측 검증 완료\n${text}`, checked ? 'good' : 'warn');
 }
@@ -663,7 +663,7 @@ function buildAnalysisReport(){
   const lines=[];
   lines.push(`3050 예측 분석 리포트`);
   lines.push(`${$('date').value} ${$('time').value}  ${c.ht} vs ${c.at}`);
-  lines.push(`데이터: S11Roaster / ELOrank / 경기기록 / S11PlayerResult`);
+  lines.push(`데이터: S11Roaster / ELOrank / 경기기록 / S11PlayersResult`);
   lines.push('');
   c.rows.forEach(r=>{
     const fs=factorSummary(r);
@@ -697,9 +697,9 @@ function buildAnalysisReport(){
     lines.push(`요약: ${hit}/${checked} 적중 (${Math.round(hit/checked*100)}%)`);
     Object.entries(bandStats).forEach(([k,v])=>{ if(v.n) lines.push(`- ${k} 구간: ${v.h}/${v.n} 적중 (${Math.round(v.h/v.n*100)}%)`); });
     lines.push('');
-    lines.push('※ 이 리포트는 현재 입력된 6세트 예측과 S11PlayerResult의 실제 결과를 비교합니다. 가중치는 자동 변경하지 않고, 누적 표본을 보고 사람이 조정하는 용도입니다.');
+    lines.push('※ 이 리포트는 현재 입력된 6세트 예측과 S11PlayersResult의 실제 결과를 비교합니다. 가중치는 자동 변경하지 않고, 누적 표본을 보고 사람이 조정하는 용도입니다.');
   }else{
-    lines.push('요약: 현재 입력 경기와 매칭되는 실제 결과가 없습니다. 날짜/선수명/맵명이 S11PlayerResult와 맞는지 확인하세요.');
+    lines.push('요약: 현재 입력 경기와 매칭되는 실제 결과가 없습니다. 날짜/선수명/맵명이 S11PlayersResult와 맞는지 확인하세요.');
   }
   const text=lines.join('\n');
   if($('analysisReport')) $('analysisReport').textContent=text;
