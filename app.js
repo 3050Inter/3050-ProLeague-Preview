@@ -526,50 +526,115 @@ function addActualResult({date='', set='', map='', p1='', p2='', winner='', lose
 function rowsToActualResults(rows, sheetName){
   const hi=findHeader(rows,'recent');
   const headers=(rows[hi]||[]).map(displayName);
-  const dateI=colIndex(headers,[/^날짜$/,/일자/,/경기.*일/,/date/i],-1);
+  const dateI=colIndex(headers,[/^날짜$/,/일자/,/경기.*일/,/date/i],0);
+  const mapI=colIndex(headers,[/^맵$/,/맵.*이름/,/map/i,/전장/],7);
   const setI=colIndex(headers,[/^set$/i,/세트/,/^SET$/],-1);
-  const mapI=colIndex(headers,[/^맵$/,/맵.*이름/,/map/i,/전장/],-1);
-  const winnerI=colIndex(headers,[/^승자선수$/,/승자.*선수/,/승리.*선수/,/winner/i,/이긴.*선수/],-1);
-  const loserI=colIndex(headers,[/^패자선수$/,/패자.*선수/,/패배.*선수/,/loser/i,/진.*선수/],-1);
-  const p1I=colIndex(headers,[/선수\s*1/,/선수.?1/,/player.?1/i,/^p1$/i,/home/i,/홈/],-1);
-  const p2I=colIndex(headers,[/선수\s*2/,/선수.?2/,/player.?2/i,/^p2$/i,/away/i,/어웨이/,/상대/],-1);
-  const resultI=colIndex(headers,[/^결과$/,/승패/,/result/i,/스코어/,/score/i],-1);
+
+  // S11PlayerResult는 구조가 고정입니다.
+  // C열 = 승자선수, F열 = 패자선수. 이 기준을 최우선으로 사용합니다.
+  // A:날짜, B:승자티어, C:승자선수, D:승자종족, E:패자티어, F:패자선수, G:패자종족, H:맵
+  let winnerI = 2;
+  let loserI = 5;
+
+  // 다른 탭을 읽을 가능성까지 대비해서, C/F가 헤더 구조와 맞지 않을 때만 헤더명으로 보정합니다.
+  const headerWinnerI=colIndex(headers,[/^승자선수$/,/승자.*선수/,/승리.*선수/,/winner/i,/이긴.*선수/],-1);
+  const headerLoserI=colIndex(headers,[/^패자선수$/,/패자.*선수/,/패배.*선수/,/loser/i,/진.*선수/],-1);
+  if(!/S11PlayerResult/i.test(sheetName) && headerWinnerI>=0 && headerLoserI>=0){
+    winnerI=headerWinnerI; loserI=headerLoserI;
+  }
+
   let count=0;
   for(let r=hi+1;r<rows.length;r++){
     const row=rows[r]||[];
-    const date=dateI>=0?row[dateI]:'';
+    const date=dateI>=0?row[dateI]:row[0];
     const set=setI>=0?row[setI]:'';
     const map=mapI>=0?row[mapI]:inferMap(row,headers);
-    let winner=winnerI>=0?row[winnerI]:'';
-    let loser=loserI>=0?row[loserI]:'';
-    let p1=p1I>=0?row[p1I]:'';
-    let p2=p2I>=0?row[p2I]:'';
-    const res=resultI>=0?displayName(row[resultI]):'';
-    if(!winner && !loser && p1 && p2 && res){
-      const nums=res.match(/(\d+)\D+(\d+)/);
-      if(nums){ const a=+nums[1], b=+nums[2]; if(a>b){ winner=p1; loser=p2; } else if(b>a){ winner=p2; loser=p1; } }
-      if(!winner && /1\s*승|p1|home|홈|선수1/i.test(res)){ winner=p1; loser=p2; }
-      if(!winner && /2\s*승|p2|away|어웨이|선수2/i.test(res)){ winner=p2; loser=p1; }
-    }
-    if(!winner || !loser){
-      const known=[];
-      row.forEach(cell=>splitTokens(cell).forEach(tok=>{ if(PLAYERS[playerKey(tok)] && !known.some(x=>playerKey(x)===playerKey(tok))) known.push(tok); }));
-      const line=row.map(displayName).join(' ');
-      const nums=line.match(/(\d+)\D+(\d+)/);
-      if(known.length>=2 && nums){ const a=+nums[1], b=+nums[2]; if(a>b){ winner=known[0]; loser=known[1]; } else if(b>a){ winner=known[1]; loser=known[0]; } }
-    }
-    if(addActualResult({date,set,map,p1,p2,winner,loser,source:sheetName})) count++;
+    const winner=winnerI>=0?row[winnerI]:'';
+    const loser=loserI>=0?row[loserI]:'';
+    if(addActualResult({date,set,map,p1:winner,p2:loser,winner,loser,source:sheetName})) count++;
   }
   return count;
 }
 function findActualFor(row){
   const date=normalizeDate($('date')?.value||'');
-  const pair=[playerKey(row.hn), playerKey(row.an)].sort().join('|');
+  const hk=playerKey(row.hn), ak=playerKey(row.an);
+  const pair=[hk, ak].sort().join('|');
   const mapK=normalize(row.map);
-  const candidates=ACTUAL_RESULTS.filter(a => a.pairKey===pair && (!date || !a.date || a.date===date));
+  const candidates=ACTUAL_RESULTS.filter(a => {
+    const dateOk = !date || !a.date || a.date===date;
+    const pairOk = a.pairKey===pair;
+    const playerOk = (a.winnerK===hk && a.loserK===ak) || (a.winnerK===ak && a.loserK===hk);
+    return dateOk && pairOk && playerOk;
+  });
   if(!candidates.length) return null;
   return candidates.find(a => mapK && normalize(a.map)===mapK) || candidates[0];
 }
+
+const HISTORY_KEY = '3050_prediction_history_v1';
+function loadPredictionHistory(){
+  try{ return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}') || {}; }
+  catch(e){ return {}; }
+}
+function savePredictionHistory(obj){
+  try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(obj || {})); }
+  catch(e){ console.warn('history save failed', e); }
+}
+function predictionHistoryKey(date, map, p1, p2){
+  const pair=[playerKey(p1), playerKey(p2)].sort().join('_vs_');
+  return `${normalizeDate(date||'')}_${normalize(map||'')}_${pair}`;
+}
+function upsertPredictionHistory(rec){
+  const hist=loadPredictionHistory();
+  hist[rec.key]=Object.assign({}, hist[rec.key]||{}, rec, {updatedAt:new Date().toISOString()});
+  savePredictionHistory(hist);
+}
+function currentTeamNames(){
+  return {home:$('homeTeam')?.value||'', away:$('awayTeam')?.value||''};
+}
+function historyRecords(){ return Object.values(loadPredictionHistory()).sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.set||0)-(b.set||0)); }
+function renderHistorySummary(){
+  const recs=historyRecords();
+  const box=$('historyBox');
+  if(!box) return;
+  if(!recs.length){ box.textContent='저장된 로컬 히스토리가 없습니다. 결과 검증 또는 분석 리포트를 누르면 저장됩니다.'; return; }
+  const total=recs.length, hit=recs.filter(r=>r.hit).length;
+  const byDate={}; recs.forEach(r=>{ const d=r.date||'미상'; (byDate[d] ||= {n:0,h:0}); byDate[d].n++; if(r.hit) byDate[d].h++; });
+  const lines=[];
+  lines.push(`로컬 예측 히스토리: ${hit}/${total} 적중 (${Math.round(hit/total*100)}%)`);
+  lines.push(`저장 위치: 이 브라우저 LocalStorage (구글시트 수정 없음)`);
+  lines.push('');
+  Object.entries(byDate).sort().forEach(([d,v])=>lines.push(`${d}: ${v.h}/${v.n} (${Math.round(v.h/v.n*100)}%)`));
+  lines.push('');
+  lines.push('최근 기록');
+  recs.slice(-12).reverse().forEach(r=>{
+    lines.push(`${r.date} SET${r.set} ${r.map} ${r.home} vs ${r.away} | 예측 ${r.predictedWinner} ${r.predictedPct}% / 실제 ${r.actualWinner} ${r.hit?'✅':'❌'}`);
+  });
+  box.textContent=lines.join('\n');
+}
+function clearPredictionHistory(){
+  if(!confirm('로컬 예측 히스토리를 초기화할까요? 구글시트 데이터는 건드리지 않습니다.')) return;
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistorySummary();
+  log('로컬 예측 히스토리를 초기화했습니다.', 'good');
+}
+function recordPredictionResult(r, actual, predName, predPct, ok){
+  const date=normalizeDate($('date')?.value||'');
+  const teams=currentTeamNames();
+  const key=predictionHistoryKey(date, r.map, r.hn, r.an);
+  upsertPredictionHistory({
+    key, date, set:r.set, map:r.map,
+    homeTeam:teams.home, awayTeam:teams.away,
+    home:r.hn, away:r.an,
+    predictedWinner:predName,
+    predictedPct:predPct,
+    actualWinner:actual.winner,
+    actualLoser:actual.loser,
+    hit:!!ok,
+    homePct:r.hp, awayPct:r.ap,
+    modelVersion:'V34'
+  });
+}
+
 function verifyCurrentPredictions(){
   const c=calc();
   let checked=0, hit=0;
@@ -577,10 +642,16 @@ function verifyCurrentPredictions(){
   c.rows.forEach(r=>{
     const actual=findActualFor(r);
     if(!actual){ lines.push(`${r.set}SET ${r.hn} vs ${r.an}: 결과 없음`); return; }
-    const predK = r.hp>=50 ? playerKey(r.hn) : playerKey(r.an);
+    const predIsHome = r.hp>=50;
+    const predK = predIsHome ? playerKey(r.hn) : playerKey(r.an);
+    const predName = predIsHome ? r.hn : r.an;
+    const predPct = Math.max(r.hp, r.ap);
     const ok = predK === actual.winnerK;
     checked++; if(ok) hit++;
-    lines.push(`${r.set}SET ${r.hn} vs ${r.an}: 예측 ${predK===playerKey(r.hn)?r.hn:r.an} ${ok?'✅':'❌'} / 실제 ${actual.winner}`);
+    const actualSide = actual.winnerK===playerKey(r.hn) ? 'HOME' : (actual.winnerK===playerKey(r.an) ? 'AWAY' : '');
+    const predSide = predIsHome ? 'HOME' : 'AWAY';
+    recordPredictionResult(r, actual, predName, predPct, ok);
+    lines.push(`${r.set}SET ${r.hn} vs ${r.an}: 예측 ${predSide}(${predName}) ${ok?'✅':'❌'} / 실제 ${actualSide}(${actual.winner})`);
   });
   const pct = checked ? Math.round(hit/checked*100) : 0;
   const text = checked ? `검증 결과: ${hit}/${checked} 적중 (${pct}%)\n${lines.join('\n')}` : `검증 가능한 결과가 없습니다.\nS11PlayerResult 날짜/선수명/승자·패자 컬럼을 확인하세요.`;
@@ -674,6 +745,7 @@ function buildAnalysisReport(){
     if(actual){
       ok = playerKey(predName)===actual.winnerK;
       checked++; if(ok) hit++;
+      recordPredictionResult(r, actual, predName, predPct, ok);
       result = `실제 ${actual.winner} 승 ${ok?'✅ 적중':'❌ 실패'}`;
       const key=predPct>=70?'70+':predPct>=60?'60~69':predPct>=55?'55~59':'박빙';
       bandStats[key].n++; if(ok) bandStats[key].h++;
@@ -703,6 +775,7 @@ function buildAnalysisReport(){
   }
   const text=lines.join('\n');
   if($('analysisReport')) $('analysisReport').textContent=text;
+  renderHistorySummary();
   log('분석 리포트 생성 완료', 'good');
 }
 
@@ -794,7 +867,7 @@ function buildUI(){
   document.querySelectorAll('select,input').forEach(e => e.addEventListener('change', () => { if(e.id==='homeTeam'||e.id==='awayTeam') updateTeamPlayers(); renderAll(); }));
   $('syncBtn').onclick = syncAll;
   $('reloadBtn').onclick = async () => { try{ log('S11Roaster 다시 읽는 중...'); const r=await syncTeamRosters(); log(`[팀 로스터]\n${r.join('\n')}`, 'good'); renderAll(); } catch(e){ log(`로스터 다시읽기 실패: ${e.message}`, 'warn'); } };
-  $('generateBtn').onclick = downloadImage; if($('verifyBtn')) $('verifyBtn').onclick = verifyCurrentPredictions; if($('reportBtn')) $('reportBtn').onclick = buildAnalysisReport;
+  $('generateBtn').onclick = downloadImage; if($('verifyBtn')) $('verifyBtn').onclick = verifyCurrentPredictions; if($('reportBtn')) $('reportBtn').onclick = buildAnalysisReport; if($('historyBtn')) $('historyBtn').onclick = renderHistorySummary; if($('clearHistoryBtn')) $('clearHistoryBtn').onclick = clearPredictionHistory;
 }
 function updateTeamPlayers(){
   const ht=$('homeTeam')?.value, at=$('awayTeam')?.value;
@@ -820,7 +893,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV32: 결과검증 시트명/승자패자 컬럼 보정 + 분석리포트`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV33: S11PlayerResult C열=승자 / F열=패자 기준 검증`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
