@@ -1,5 +1,5 @@
 {
-  "version": "V30_WebSite",
+  "version": "V32_WebSite",
   "sheetId": "1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs",
   "teamSheetId": "1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE",
   "teamRosterSheet": "S11Roaster",
@@ -55,6 +55,6 @@
   "eloClampMin": 1,
   "eloClampMax": 99,
   "actualResultSheets": [
-    "S11PlayersResult"
+    "S11PlayerResult"
   ]
 }

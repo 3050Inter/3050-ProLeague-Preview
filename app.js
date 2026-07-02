@@ -529,8 +529,8 @@ function rowsToActualResults(rows, sheetName){
   const dateI=colIndex(headers,[/^날짜$/,/일자/,/경기.*일/,/date/i],-1);
   const setI=colIndex(headers,[/^set$/i,/세트/,/^SET$/],-1);
   const mapI=colIndex(headers,[/^맵$/,/맵.*이름/,/map/i,/전장/],-1);
-  const winnerI=colIndex(headers,[/승자/,/승리.*선수/,/winner/i,/이긴/],-1);
-  const loserI=colIndex(headers,[/패자/,/패배.*선수/,/loser/i,/진/],-1);
+  const winnerI=colIndex(headers,[/^승자선수$/,/승자.*선수/,/승리.*선수/,/winner/i,/이긴.*선수/],-1);
+  const loserI=colIndex(headers,[/^패자선수$/,/패자.*선수/,/패배.*선수/,/loser/i,/진.*선수/],-1);
   const p1I=colIndex(headers,[/선수\s*1/,/선수.?1/,/player.?1/i,/^p1$/i,/home/i,/홈/],-1);
   const p2I=colIndex(headers,[/선수\s*2/,/선수.?2/,/player.?2/i,/^p2$/i,/away/i,/어웨이/,/상대/],-1);
   const resultI=colIndex(headers,[/^결과$/,/승패/,/result/i,/스코어/,/score/i],-1);
@@ -583,7 +583,7 @@ function verifyCurrentPredictions(){
     lines.push(`${r.set}SET ${r.hn} vs ${r.an}: 예측 ${predK===playerKey(r.hn)?r.hn:r.an} ${ok?'✅':'❌'} / 실제 ${actual.winner}`);
   });
   const pct = checked ? Math.round(hit/checked*100) : 0;
-  const text = checked ? `검증 결과: ${hit}/${checked} 적중 (${pct}%)\n${lines.join('\n')}` : `검증 가능한 결과가 없습니다.\nS11PlayersResult 날짜/선수명/승자·패자 컬럼을 확인하세요.`;
+  const text = checked ? `검증 결과: ${hit}/${checked} 적중 (${pct}%)\n${lines.join('\n')}` : `검증 가능한 결과가 없습니다.\nS11PlayerResult 날짜/선수명/승자·패자 컬럼을 확인하세요.`;
   const el=$('resultCheck'); if(el) el.textContent=text;
   log(`예측 검증 완료\n${text}`, checked ? 'good' : 'warn');
 }
@@ -663,7 +663,7 @@ function buildAnalysisReport(){
   const lines=[];
   lines.push(`3050 예측 분석 리포트`);
   lines.push(`${$('date').value} ${$('time').value}  ${c.ht} vs ${c.at}`);
-  lines.push(`데이터: S11Roaster / ELOrank / 경기기록 / S11PlayersResult`);
+  lines.push(`데이터: S11Roaster / ELOrank / 경기기록 / S11PlayerResult`);
   lines.push('');
   c.rows.forEach(r=>{
     const fs=factorSummary(r);
@@ -697,9 +697,9 @@ function buildAnalysisReport(){
     lines.push(`요약: ${hit}/${checked} 적중 (${Math.round(hit/checked*100)}%)`);
     Object.entries(bandStats).forEach(([k,v])=>{ if(v.n) lines.push(`- ${k} 구간: ${v.h}/${v.n} 적중 (${Math.round(v.h/v.n*100)}%)`); });
     lines.push('');
-    lines.push('※ 이 리포트는 현재 입력된 6세트 예측과 S11PlayersResult의 실제 결과를 비교합니다. 가중치는 자동 변경하지 않고, 누적 표본을 보고 사람이 조정하는 용도입니다.');
+    lines.push('※ 이 리포트는 현재 입력된 6세트 예측과 S11PlayerResult의 실제 결과를 비교합니다. 가중치는 자동 변경하지 않고, 누적 표본을 보고 사람이 조정하는 용도입니다.');
   }else{
-    lines.push('요약: 현재 입력 경기와 매칭되는 실제 결과가 없습니다. 날짜/선수명/맵명이 S11PlayersResult와 맞는지 확인하세요.');
+    lines.push('요약: 현재 입력 경기와 매칭되는 실제 결과가 없습니다. 날짜/선수명/맵명이 S11PlayerResult와 맞는지 확인하세요.');
   }
   const text=lines.join('\n');
   if($('analysisReport')) $('analysisReport').textContent=text;
@@ -820,7 +820,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV31: 분석리포트 + 결과검증 + 선수별 맵 보정`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV32: 결과검증 시트명/승자패자 컬럼 보정 + 분석리포트`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
