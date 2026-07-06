@@ -632,7 +632,7 @@ function recordPredictionResult(r, actual, predName, predPct, ok){
     actualLoser:actual.loser,
     hit:!!ok,
     homePct:r.hp, awayPct:r.ap,
-    modelVersion:'V37'
+    modelVersion:'V39'
   });
 }
 
@@ -735,7 +735,7 @@ function buildAnalysisReport(){
   const lines=[];
   lines.push(`3050 예측 분석 리포트`);
   lines.push(`${$('date').value} ${$('time').value}  ${c.ht} vs ${c.at}`);
-  lines.push(`데이터: S11Roaster / 최신ELO시트(ELOrank·경기기록) / S11PlayerResult`);
+  lines.push(`데이터: S11Roaster / 최신ELO시트(읽기 전용) / S11PlayerResult`);
   lines.push('');
   c.rows.forEach(r=>{
     const fs=factorSummary(r);
@@ -894,7 +894,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV37: 최신 ELO 시트 연동 / 읽기 전용`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV39: 최신 ELO 시트 읽기 전용 / Apps Script 미수정`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
@@ -1141,9 +1141,9 @@ function renderPreviews(){
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
   if(c.individual){
-    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV37: 최신 ELO 시트 연동 + BoN 4선승 스코어 수정`;
+    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV39: 최신 ELO 시트 읽기 전용 + BoN 스코어 수정`;
   }else{
-    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV37: 최신 ELO 시트 연동 / 읽기 전용`;
+    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV39: 최신 ELO 시트 읽기 전용 / Apps Script 미수정`;
   }
 }
 
