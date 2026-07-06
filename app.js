@@ -10,7 +10,8 @@ const displayName = v => (v ?? '').toString().replace(/[\u00A0\u200B-\u200D\uFEF
 const normalize = v => displayName(v).replace(/[\s　]+/g, '').toLowerCase();
 function cleanPlayerName(v){
   let s = displayName(v);
-  s = s.replace(/^\d+\.?\s*/, '');
+  // V35: 숫자로 시작하는 닉네임(예: 4CUS)을 보존. 순번 표기(1. 홍길동 / 1)만 제거
+  s = s.replace(/^\d+[.)]\s+/, '');
   s = s.replace(/\s*[\(\[\{](?:T|P|Z|테란|토스|프로토스|저그|Terran|Protoss|Zerg)[\)\]\}]\s*$/i, '');
   s = s.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
   return s;
@@ -893,7 +894,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV33: S11PlayerResult C열=승자 / F열=패자 기준 검증`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV35: 팀전 + 개인리그 BoN 지원 / 숫자 닉네임 보존`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
@@ -960,12 +961,14 @@ async function renderCanvas(){
     drawMulti(ctx,[winName,winPct+'%'],cx('win'),y,15,wc,'center',1.22,'900',92);
   });
 
-  // ACE 행은 맵과 ACE 티어만 교체
-  const ay1=yLines[6], ay2=yLines[7], ay=yCenters[6];
-  ['map','hp','ht','he','ap','at','ae','win'].forEach(k=>fillCell(ctx,col[k][0],ay1,col[k][1],ay2));
-  drawCellText(ctx,$('aceMap').value,cx('map'),ay,18,CFG.colors.white,96,'800');
-  drawText(ctx,`ACE 티어 : ${$('aceTier').value}`,321,ay,18,CFG.colors.white,'center','800',250);
-  drawText(ctx,`ACE 티어 : ${$('aceTier').value}`,649,ay,18,CFG.colors.white,'center','800',260);
+  // 팀전일 때만 7SET을 ACE 행으로 표시. 개인리그는 7SET까지 실제 맵/선수/예측을 그대로 사용.
+  if(!isIndividualMode()){
+    const ay1=yLines[6], ay2=yLines[7], ay=yCenters[6];
+    ['map','hp','ht','he','ap','at','ae','win'].forEach(k=>fillCell(ctx,col[k][0],ay1,col[k][1],ay2));
+    drawCellText(ctx,$('aceMap').value,cx('map'),ay,18,CFG.colors.white,96,'800');
+    drawText(ctx,`ACE 티어 : ${$('aceTier').value}`,321,ay,18,CFG.colors.white,'center','800',250);
+    drawText(ctx,`ACE 티어 : ${$('aceTier').value}`,649,ay,18,CFG.colors.white,'center','800',260);
+  }
 
   // 팀 예상 스코어 패널
   fillBox(ctx, 20, 812, 310, 108, 'rgb(0,0,0)');
@@ -979,7 +982,7 @@ async function renderCanvas(){
   fillBox(ctx, 359, 838, 456, 82, 'rgb(0,0,0)');
   const sx=[393,459,525,591,657,723,789];
   c.rows.forEach((r,i)=>{ const isHome = r.winner===c.ht; drawText(ctx,isHome?'HOME':'AWAY',sx[i],878,14,isHome?CFG.colors.home:CFG.colors.away,'center','900',60); });
-  drawText(ctx,'-',sx[6],878,18,CFG.colors.gray,'center','900',35);
+  if(!isIndividualMode()) drawText(ctx,'-',sx[6],878,18,CFG.colors.gray,'center','900',35);
 
   // 오늘의 빅매치 패널 (FINAL: 예상 승률 가이드 삭제 후 우측 영역까지 확대)
   fillBox(ctx, 842, 744, 686, 224, 'rgb(0,0,0)');
@@ -998,4 +1001,118 @@ async function renderCanvas(){
 }
 async function renderAll(){ renderPreviews(); await renderCanvas(); }
 function downloadImage(){ renderCanvas().then(()=>{ const c=calc(); const name=`3050_PREVIEW_${c.ht}_vs_${c.at}_${$('date').value.replaceAll('.','')}_${$('time').value.replace(':','')}.png`; const a=document.createElement('a'); a.download=name; a.href=$('canvas').toDataURL('image/png'); a.click(); }); }
+
+// ===================== V35: 개인리그/다전제 지원 + 숫자 닉네임 보존 =====================
+function isIndividualMode(){ return $('matchMode')?.value === 'individual'; }
+function boLimit(){ const m = displayName($('bo')?.value || 'Bo7').match(/(\d+)/); const n = m ? Math.max(1, +m[1]) : 7; return Math.min(7, n); }
+function winsNeeded(){ return Math.floor(boLimit()/2) + 1; }
+function refreshPlayerList(){
+  const dl = $('playerList'); if(!dl) return;
+  const names = Object.values(PLAYERS || {}).map(p=>p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  dl.innerHTML = names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+function setModeVisibility(){
+  const ind = isIndividualMode();
+  if($('individualBox')) $('individualBox').style.display = ind ? 'block' : 'none';
+  document.querySelectorAll('.teamBox').forEach(el => el.style.opacity = ind ? '0.55' : '1');
+  if($('aceMap')) $('aceMap').disabled = ind;
+  if($('aceTier')) $('aceTier').disabled = ind;
+  updateTeamPlayers();
+}
+function seriesSummary(probs){
+  const need = Math.floor(probs.length/2)+1;
+  let dp = {'0-0': 1};
+  for(const p of probs){
+    const ndp = {};
+    for(const [key,val] of Object.entries(dp)){
+      const [h,a] = key.split('-').map(Number);
+      if(h>=need || a>=need){ ndp[key]=(ndp[key]||0)+val; continue; }
+      ndp[`${h+1}-${a}`]=(ndp[`${h+1}-${a}`]||0)+val*(p/100);
+      ndp[`${h}-${a+1}`]=(ndp[`${h}-${a+1}`]||0)+val*(1-p/100);
+    }
+    dp = ndp;
+  }
+  let home=0, away=0, bestKey='', bestVal=-1;
+  for(const [key,val] of Object.entries(dp)){
+    const [h,a] = key.split('-').map(Number);
+    if(h>a) home+=val; else away+=val;
+    if((h>=need || a>=need) && val>bestVal){ bestVal=val; bestKey=key; }
+  }
+  return {homePct:clampPct(home*100), awayPct:clampPct(away*100), score:bestKey};
+}
+
+// V35 buildUI override: 7SET 모두 생성하고, 모드에 따라 팀전/개인전으로 계산
+function buildUI(){
+  ROSTERS = makeEmptyRosters();
+  fillSelect($('aceTier'), CFG.aceTiers, '퀸');
+  $('date').value = CFG.dateDefault; $('time').value = CFG.timeDefault;
+  if($('bo').tagName === 'SELECT') $('bo').value = CFG.boDefault || 'Bo7'; else $('bo').value = CFG.boDefault || 'Bo7';
+  buildTeamSelectsKeep();
+  const tb=$('setRows'); tb.innerHTML=''; state.sets=[];
+  for(let i=1;i<=7;i++){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select></td><td><select id="a${i}"></select></td>`;
+    tb.appendChild(tr); state.sets.push(i);
+  }
+  updateMapSelects(); updateTeamPlayers(); setModeVisibility();
+  document.querySelectorAll('select,input').forEach(e => e.addEventListener('change', () => { if(e.id==='homeTeam'||e.id==='awayTeam'||e.id==='matchMode'||e.id==='playerA'||e.id==='playerB'||e.id==='bo') updateTeamPlayers(); setModeVisibility(); renderAll(); }));
+  $('syncBtn').onclick = syncAll;
+  $('reloadBtn').onclick = async () => { try{ log('S11Roaster 다시 읽는 중...'); const r=await syncTeamRosters(); log(`[팀 로스터]\n${r.join('\n')}`, 'good'); renderAll(); } catch(e){ log(`로스터 다시읽기 실패: ${e.message}`, 'warn'); } };
+  $('generateBtn').onclick = downloadImage;
+  if($('verifyBtn')) $('verifyBtn').onclick = verifyCurrentPredictions;
+  if($('reportBtn')) $('reportBtn').onclick = buildAnalysisReport;
+  if($('historyBtn')) $('historyBtn').onclick = renderHistorySummary;
+  if($('clearHistoryBtn')) $('clearHistoryBtn').onclick = clearPredictionHistory;
+}
+function updateTeamPlayers(){
+  const ind = isIndividualMode();
+  const ht=$('homeTeam')?.value, at=$('awayTeam')?.value;
+  const hp=ROSTERS[ht]?.players || [], ap=ROSTERS[at]?.players || [];
+  if(ind){
+    const a = cleanPlayerName($('playerA')?.value || '') || 'PLAYER A';
+    const b = cleanPlayerName($('playerB')?.value || '') || 'PLAYER B';
+    for(let i=1;i<=7;i++){ fillSelect($(`h${i}`), [a], a); fillSelect($(`a${i}`), [b], b); }
+    if($('homeInfo')) $('homeInfo').innerHTML=`개인리그 선수 A: ${a}<br>팀 로스터와 무관하게 MASTER DB/ELO에서 조회`;
+    if($('awayInfo')) $('awayInfo').innerHTML=`개인리그 선수 B: ${b}<br>Bo${boLimit()} / ${winsNeeded()}선승`;
+    return;
+  }
+  for(let i=1;i<=7;i++){ fillSelect($(`h${i}`), hp, hp[(i-1)%Math.max(hp.length,1)]); fillSelect($(`a${i}`), ap, ap[(i-1)%Math.max(ap.length,1)]); }
+  if($('homeInfo')) $('homeInfo').innerHTML=`감독: ${ROSTERS[ht]?.감독||'-'}<br>부감독: ${ROSTERS[ht]?.부감독||'-'}<br>보호선수: ${ROSTERS[ht]?.보호선수||'-'}<br>선수: ${hp.length}명`;
+  if($('awayInfo')) $('awayInfo').innerHTML=`감독: ${ROSTERS[at]?.감독||'-'}<br>부감독: ${ROSTERS[at]?.부감독||'-'}<br>보호선수: ${ROSTERS[at]?.보호선수||'-'}<br>선수: ${ap.length}명`;
+}
+function calc(){
+  const ind = isIndividualMode();
+  const limit = ind ? boLimit() : 6;
+  const ht = ind ? (cleanPlayerName($('playerA')?.value)||'PLAYER A') : ($('homeTeam')?.value || OFFICIAL_TEAMS[0]);
+  const at = ind ? (cleanPlayerName($('playerB')?.value)||'PLAYER B') : ($('awayTeam')?.value || OFFICIAL_TEAMS[1]);
+  let homeScore=0, awayScore=0, rows=[], diffs=[];
+  for(let i=1;i<=limit;i++){
+    const hn = ind ? ht : ($(`h${i}`)?.value || '');
+    const an = ind ? at : ($(`a${i}`)?.value || '');
+    const map=$(`map${i}`)?.value || '';
+    const h=infoOf(hn), a=infoOf(an), hp=predictedProb(hn, an, map), ap=100-hp;
+    const winner=hp>=50?ht:at; if(winner===ht) homeScore++; else awayScore++;
+    const hStats = statsFor(hn, an, map), aStats = statsFor(an, hn, map);
+    rows.push({set:i,map,hn,an,h,a,hp,ap,winner,hStats,aStats}); diffs.push({diff:Math.abs(hp-50),row:rows[rows.length-1]});
+  }
+  const series = ind ? seriesSummary(rows.map(r=>r.hp)) : null;
+  if(ind){ homeScore = series.score ? +series.score.split('-')[0] : homeScore; awayScore = series.score ? +series.score.split('-')[1] : awayScore; }
+  diffs.sort((x,y)=>x.diff-y.diff); const big=diffs[0]?.row || rows[0]; return {ht,at,rows,homeScore,awayScore,big,individual:ind,series};
+}
+function renderPreviews(){
+  if(!$('homePreview')) return;
+  const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
+  c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
+  $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
+  if(c.individual){
+    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV35: 개인리그 다전제 + 숫자 닉네임 보존`;
+  }else{
+    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV35: 팀전 + 개인리그 BoN 지원 / 숫자 닉네임 보존`;
+  }
+}
+
+// syncAll 확장: 선수 datalist 갱신
+const _syncAllV34 = syncAll;
+syncAll = async function(){ await _syncAllV34(); refreshPlayerList(); setModeVisibility(); };
+
 (async function init(){ CFG=await loadJSON('config.json'); buildUI(); await syncAll(); })();
