@@ -632,7 +632,7 @@ function recordPredictionResult(r, actual, predName, predPct, ok){
     actualLoser:actual.loser,
     hit:!!ok,
     homePct:r.hp, awayPct:r.ap,
-    modelVersion:'V34'
+    modelVersion:'V37'
   });
 }
 
@@ -735,7 +735,7 @@ function buildAnalysisReport(){
   const lines=[];
   lines.push(`3050 예측 분석 리포트`);
   lines.push(`${$('date').value} ${$('time').value}  ${c.ht} vs ${c.at}`);
-  lines.push(`데이터: S11Roaster / ELOrank / 경기기록 / S11PlayerResult`);
+  lines.push(`데이터: S11Roaster / 최신ELO시트(ELOrank·경기기록) / S11PlayerResult`);
   lines.push('');
   c.rows.forEach(r=>{
     const fs=factorSummary(r);
@@ -894,7 +894,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV36: 개인리그 전체 선수 호출 / 숫자 닉네임 보존`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV37: 최신 ELO 시트 연동 / 읽기 전용`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
@@ -1103,9 +1103,18 @@ function updateTeamPlayers(){
   if($('homeInfo')) $('homeInfo').innerHTML=`감독: ${ROSTERS[ht]?.감독||'-'}<br>부감독: ${ROSTERS[ht]?.부감독||'-'}<br>보호선수: ${ROSTERS[ht]?.보호선수||'-'}<br>선수: ${hp.length}명`;
   if($('awayInfo')) $('awayInfo').innerHTML=`감독: ${ROSTERS[at]?.감독||'-'}<br>부감독: ${ROSTERS[at]?.부감독||'-'}<br>보호선수: ${ROSTERS[at]?.보호선수||'-'}<br>선수: ${ap.length}명`;
 }
+function deterministicSeriesScore(rows, need){
+  let h=0, a=0;
+  for(const r of rows){
+    if(r.hp >= 50) h++; else a++;
+    if(h >= need || a >= need) break;
+  }
+  return {h,a};
+}
 function calc(){
   const ind = isIndividualMode();
   const limit = ind ? boLimit() : 6;
+  const need = ind ? winsNeeded() : 4;
   const ht = ind ? personalA() : ($('homeTeam')?.value || OFFICIAL_TEAMS[0]);
   const at = ind ? personalB() : ($('awayTeam')?.value || OFFICIAL_TEAMS[1]);
   let homeScore=0, awayScore=0, rows=[], diffs=[];
@@ -1114,12 +1123,16 @@ function calc(){
     const an = ind ? at : ($(`a${i}`)?.value || '');
     const map=$(`map${i}`)?.value || '';
     const h=infoOf(hn), a=infoOf(an), hp=predictedProb(hn, an, map), ap=100-hp;
-    const winner=hp>=50?ht:at; if(winner===ht) homeScore++; else awayScore++;
+    const winner=hp>=50?ht:at;
+    if(!ind){ if(winner===ht) homeScore++; else awayScore++; }
     const hStats = statsFor(hn, an, map), aStats = statsFor(an, hn, map);
     rows.push({set:i,map,hn,an,h,a,hp,ap,winner,hStats,aStats}); diffs.push({diff:Math.abs(hp-50),row:rows[rows.length-1]});
   }
   const series = ind ? seriesSummary(rows.map(r=>r.hp)) : null;
-  if(ind){ homeScore = series.score ? +series.score.split('-')[0] : homeScore; awayScore = series.score ? +series.score.split('-')[1] : awayScore; }
+  if(ind){
+    const score = deterministicSeriesScore(rows, need);
+    homeScore = score.h; awayScore = score.a;
+  }
   diffs.sort((x,y)=>x.diff-y.diff); const big=diffs[0]?.row || rows[0]; return {ht,at,rows,homeScore,awayScore,big,individual:ind,series};
 }
 function renderPreviews(){
@@ -1128,9 +1141,9 @@ function renderPreviews(){
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
   if(c.individual){
-    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV36: 개인리그 전체 선수 호출 + BoN 지원`;
+    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV37: 최신 ELO 시트 연동 + BoN 4선승 스코어 수정`;
   }else{
-    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV36: 개인리그 전체 선수 호출 / 숫자 닉네임 보존`;
+    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV37: 최신 ELO 시트 연동 / 읽기 전용`;
   }
 }
 

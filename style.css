@@ -1,1 +1,65 @@
 *{box-sizing:border-box}body{margin:0;background:#101418;color:#e8eef7;font-family:'Malgun Gothic','Segoe UI',Arial,sans-serif}.app{display:grid;grid-template-columns:310px 1fr;height:100vh}.side{background:#141a20;border-right:1px solid #27313b;padding:18px;overflow:auto}.main{padding:18px;overflow:auto}.logo{font-size:28px;font-weight:900;color:#fff;line-height:1.05;margin-bottom:8px}.logo span{color:#ff3434}.sub{color:#9aa8b6;font-size:13px;margin-bottom:16px}.card{background:#1a222b;border:1px solid #303b46;border-radius:10px;padding:14px;margin-bottom:14px}.card h3{margin:0 0 12px;font-size:16px;color:#fff}.row{display:grid;grid-template-columns:105px 1fr;gap:8px;align-items:center;margin:8px 0}label{color:#b9c5d1;font-size:13px}select,input,textarea{background:#0f151c;border:1px solid #35414d;color:#f4f7fb;border-radius:6px;padding:9px;font-size:14px;width:100%}button{border:0;border-radius:8px;padding:11px 14px;background:#2d8cff;color:#fff;font-weight:800;cursor:pointer}button.red{background:#e43131}.btns{display:flex;gap:8px;flex-wrap:wrap}.status{font-size:13px;color:#cbd4de;white-space:pre-line;background:#0f151c;border:1px solid #2d3742;border-radius:8px;padding:10px;min-height:70px}.reportBox{max-height:430px;overflow:auto;line-height:1.55}.top{display:grid;grid-template-columns:1fr 220px 1fr;gap:16px;margin-bottom:14px}.teamBox{background:#151d25;border:1px solid #303b46;border-radius:10px;padding:14px}.homeTitle{color:#ff4747;font-weight:900}.awayTitle{color:#36aaff;font-weight:900}.versus{text-align:center;align-self:center}.versus .vs{font-size:54px;font-weight:900}.versus .meta{color:#cfd6de}.sets{display:grid;grid-template-columns:1fr 520px;gap:14px}.setTable{width:100%;border-collapse:collapse;background:#151d25;border:1px solid #303b46;border-radius:10px;overflow:hidden}.setTable th,.setTable td{border:1px solid #303b46;padding:8px;text-align:center}.setTable th{background:#202a34}.previewPanel{background:#151d25;border:1px solid #303b46;border-radius:10px;padding:14px}.playersGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.miniTable{width:100%;border-collapse:collapse}.miniTable th,.miniTable td{border:1px solid #303b46;padding:7px;text-align:center;font-size:13px}.canvasWrap{display:flex;gap:14px;align-items:flex-start;margin-top:14px}canvas{max-width:100%;border:1px solid #303b46;background:#000}.bigGenerate{font-size:22px;padding:16px 24px;width:100%;margin-top:10px;background:linear-gradient(90deg,#e52f2f,#ff4a4a)}.hint{font-size:12px;color:#94a3b2;line-height:1.5}.good{color:#18d66b}.warn{color:#ffd84a}.err{color:#ff5e5e}@media(max-width:1100px){.app{grid-template-columns:1fr}.top,.sets{grid-template-columns:1fr}.side{height:auto}}
+
+
+/* V38 Mobile UI Edition */
+.mobileQuickbar{display:none}
+
+@media (max-width: 900px){
+  html, body{overflow-x:hidden;}
+  body{padding:0;margin:0;background:#07090d;}
+  .app{display:block;width:100%;max-width:100%;padding-bottom:82px;}
+  .side{width:auto;position:relative;min-height:auto;padding:14px 12px;border-right:0;border-bottom:1px solid #222;background:#0b0f16;}
+  .logo{font-size:26px;line-height:1.05;text-align:center;margin-bottom:4px;}
+  .sub{text-align:center;font-size:12px;margin-bottom:10px;color:#aaa;}
+  .main{padding:12px;max-width:100%;}
+  .card{border-radius:14px;margin:10px 0;padding:12px;background:#111722;box-shadow:0 2px 10px rgba(0,0,0,.18);}
+  .card h3{font-size:15px;margin:0 0 10px;}
+  .row{display:block;margin:9px 0;}
+  .row label{display:block;width:auto;margin-bottom:5px;font-size:13px;color:#d6d6d6;}
+  input, select, button{font-size:16px;min-height:42px;border-radius:10px;}
+  select, input{width:100%;box-sizing:border-box;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .btns button{width:100%;}
+  .bigGenerate{width:100%;height:52px;font-size:18px;font-weight:800;background:#d6aa39;color:#111;border:0;}
+
+  .top{display:grid;grid-template-columns:1fr;gap:10px;}
+  .teamBox{border-radius:14px;padding:12px;background:#111722;}
+  .versus{order:-1;border-radius:14px;padding:12px;background:linear-gradient(135deg,#1a1d26,#10131a);}
+  .vs{font-size:36px;text-align:center;}
+  .meta{text-align:center;font-size:14px;}
+
+  .sets{display:block;}
+  .setTable{display:block;width:100%;border-collapse:separate;border-spacing:0 10px;}
+  .setTable thead{display:none;}
+  .setTable tbody{display:block;}
+  .setTable tr{display:grid;grid-template-columns:54px 1fr;gap:8px;background:#111722;border:1px solid #263044;border-radius:14px;padding:10px;margin-bottom:10px;}
+  .setTable td{display:block;border:0!important;padding:4px!important;background:transparent!important;}
+  .setTable td:first-child{grid-row:1 / span 3;align-self:center;text-align:center;font-size:18px;font-weight:900;color:#e6bd55;}
+  .setTable td:nth-child(2)::before{content:'MAP';display:block;font-size:11px;color:#aaa;margin-bottom:3px;}
+  .setTable td:nth-child(3)::before{content:'HOME';display:block;font-size:11px;color:#ff8a8a;margin-bottom:3px;}
+  .setTable td:nth-child(4)::before{content:'AWAY';display:block;font-size:11px;color:#8db6ff;margin-bottom:3px;}
+  .setTable select{height:42px;}
+
+  .previewPanel{margin-top:12px;}
+  .playersGrid{display:block;}
+  .miniTable{display:block;width:100%;overflow-x:auto;white-space:nowrap;}
+  .miniTable th,.miniTable td{font-size:12px;padding:6px;}
+  .status,.reportBox{max-height:260px;overflow:auto;font-size:12px;line-height:1.45;white-space:pre-wrap;}
+  .canvasWrap{margin-top:12px;overflow-x:auto;border-radius:14px;padding:8px;background:#0b0f16;}
+  #canvas{width:100%;height:auto;min-width:320px;}
+
+  #status{max-height:180px;}
+  #individualBox{border-top:1px solid #30394a!important;margin-top:10px!important;}
+
+  .mobileQuickbar{display:grid;position:fixed;left:0;right:0;bottom:0;z-index:9999;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(8,10,14,.96);border-top:1px solid #2c3340;backdrop-filter:blur(8px);}
+  .mobileQuickbar button{height:48px;min-height:48px;border:0;border-radius:12px;background:#1b2432;color:#fff;font-weight:800;font-size:14px;}
+  .mobileQuickbar button:nth-child(4){background:#d6aa39;color:#111;}
+}
+
+@media (max-width: 420px){
+  .logo{font-size:22px;}
+  .side,.main{padding-left:10px;padding-right:10px;}
+  .card{padding:10px;}
+  .setTable tr{grid-template-columns:48px 1fr;}
+  input,select,button{font-size:15px;}
+}
