@@ -1176,7 +1176,25 @@ function updateTeamPlayers(){
     if($('awayInfo')) $('awayInfo').innerHTML=`개인리그 선수 B: ${currentB}<br>Bo${boLimit()} / ${winsNeeded()}선승`;
     return;
   }
-  for(let i=1;i<=7;i++){ fillSelect($(`h${i}`), hp, hp[(i-1)%Math.max(hp.length,1)]); fillSelect($(`a${i}`), ap, ap[(i-1)%Math.max(ap.length,1)]); }
+  for (let i = 1; i <= 7; i++) {
+  const hSel = $(`h${i}`);
+  const aSel = $(`a${i}`);
+
+  const oldH = hSel?.value;
+  const oldA = aSel?.value;
+
+  fillSelect(
+    hSel,
+    hp,
+    hp.includes(oldH) ? oldH : hp[(i - 1) % Math.max(hp.length, 1)]
+  );
+
+  fillSelect(
+    aSel,
+    ap,
+    ap.includes(oldA) ? oldA : ap[(i - 1) % Math.max(ap.length, 1)]
+  );
+}
   if($('homeInfo')) $('homeInfo').innerHTML=`감독: ${ROSTERS[ht]?.감독||'-'}<br>부감독: ${ROSTERS[ht]?.부감독||'-'}<br>보호선수: ${ROSTERS[ht]?.보호선수||'-'}<br>선수: ${hp.length}명`;
   if($('awayInfo')) $('awayInfo').innerHTML=`감독: ${ROSTERS[at]?.감독||'-'}<br>부감독: ${ROSTERS[at]?.부감독||'-'}<br>보호선수: ${ROSTERS[at]?.보호선수||'-'}<br>선수: ${ap.length}명`;
 }
