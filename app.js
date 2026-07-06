@@ -22,6 +22,50 @@ async function loadJSON(path){ return fetch(path + '?v=' + Date.now()).then(r =>
 function option(sel, val, text){ if(!sel) return; const o = document.createElement('option'); o.value = val; o.textContent = text ?? val; sel.appendChild(o); }
 function fillSelect(sel, arr, selected){ if(!sel) return; const old = selected ?? sel.value; sel.innerHTML = ''; (arr || []).forEach(v => option(sel, v)); if(old && (arr || []).includes(old)) sel.value = old; }
 function emptyTeam(){ return { 감독:'-', 부감독:'-', 보호선수:'-', players:[] }; }
+function isLatestEloRequest(sheet, id){
+  const sid = id || CFG.sheetId;
+  if(!CFG.latestEloSheetId) return false;
+  return sid === CFG.latestEloSheetId;
+}
+function rowsFromAnyText(txt){
+  const t = (txt || '').trim();
+  if(!t) throw new Error('빈 응답');
+  if(/^</.test(t)) throw new Error('HTML 응답 - 데이터 API가 아님');
+  if(t[0] === '{' || t[0] === '['){
+    const j = JSON.parse(t);
+    if(Array.isArray(j)) return j;
+    if(Array.isArray(j.rows)) return j.rows;
+    if(j.data && Array.isArray(j.data)) return j.data;
+    if(j.sheets && typeof j.sheets === 'object'){
+      const first = Object.values(j.sheets).find(Array.isArray);
+      if(first) return first;
+    }
+    throw new Error('JSON 구조 인식 실패');
+  }
+  return csvParse(t);
+}
+async function fetchViaEloApi(sheet){
+  if(!CFG.eloApiUrl) throw new Error('eloApiUrl 없음');
+  const base = CFG.eloApiUrl;
+  const urls = [
+    `${base}?sheet=${encodeURIComponent(sheet)}&output=csv&t=${Date.now()}`,
+    `${base}?action=csv&sheet=${encodeURIComponent(sheet)}&t=${Date.now()}`,
+    `${base}?action=getSheet&sheet=${encodeURIComponent(sheet)}&t=${Date.now()}`,
+    `${base}?page=${encodeURIComponent(sheet)}&t=${Date.now()}`,
+    `${base}?t=${Date.now()}`
+  ];
+  let lastErr = null;
+  for(const url of urls){
+    try{
+      const res = await fetch(url, {cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const txt = await res.text();
+      const rows = rowsFromAnyText(txt);
+      if(rows && rows.length) return rows;
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('Apps Script 읽기 실패');
+}
 function makeEmptyRosters(){ const r = {}; OFFICIAL_TEAMS.forEach(t => r[t] = emptyTeam()); return r; }
 function cleanTeamName(v){ const s = displayName(v); const hit = OFFICIAL_TEAMS.find(t => normalize(t) === normalize(s)); return hit || s; }
 function isOfficialTeam(v){ return OFFICIAL_TEAMS.some(t => normalize(t) === normalize(v)); }
@@ -39,12 +83,24 @@ function csvParse(text){
 }
 async function fetchSheet(sheet, id){
   const sid = id || CFG.sheetId;
-  const url = `https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}&t=${Date.now()}`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error(res.status);
-  const txt = await res.text();
-  if(/^\s*</.test(txt)) throw new Error('CSV 아님/권한 확인');
-  return csvParse(txt);
+  const errs = [];
+  // V40: 최신 ELO 시트는 Apps Script 웹앱 URL을 먼저 읽기 전용으로 시도
+  if(isLatestEloRequest(sheet, sid) && CFG.eloApiUrl){
+    try{ return await fetchViaEloApi(sheet); }
+    catch(e){ errs.push(`AppsScript:${e.message}`); }
+  }
+  // 기존 방식: Google Sheets CSV 읽기 전용
+  try{
+    const url = `https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}&t=${Date.now()}`;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error(res.status);
+    const txt = await res.text();
+    if(/^\s*</.test(txt)) throw new Error('CSV 아님/권한 확인');
+    return csvParse(txt);
+  }catch(e){
+    errs.push(`CSV:${e.message}`);
+    throw new Error(errs.join(' / '));
+  }
 }
 function colIndex(headers, patterns, fallback=-1){
   for(const p of patterns){ const idx = headers.findIndex(h => p.test(displayName(h))); if(idx >= 0) return idx; }
@@ -632,7 +688,7 @@ function recordPredictionResult(r, actual, predName, predPct, ok){
     actualLoser:actual.loser,
     hit:!!ok,
     homePct:r.hp, awayPct:r.ap,
-    modelVersion:'V39'
+    modelVersion:'V40'
   });
 }
 
@@ -894,7 +950,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV39: 최신 ELO 시트 읽기 전용 / Apps Script 미수정`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV40: Apps Script 읽기전용 우선 + CSV fallback`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
@@ -1141,9 +1197,9 @@ function renderPreviews(){
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
   if(c.individual){
-    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV39: 최신 ELO 시트 읽기 전용 + BoN 스코어 수정`;
+    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV40: 최신 ELO API 읽기전용 + BoN 스코어 수정`;
   }else{
-    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV39: 최신 ELO 시트 읽기 전용 / Apps Script 미수정`;
+    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV40: Apps Script 읽기전용 우선 + CSV fallback`;
   }
 }
 

@@ -1,5 +1,5 @@
 {
-  "version": "V39_WebSite",
+  "version": "V40_WebSite",
   "sheetId": "1mglJvzsQTld-0FUokruPam2bfvYBUxYl",
   "teamSheetId": "1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE",
   "teamRosterSheet": "S11Roaster",
@@ -62,5 +62,6 @@
     "S11PlayerResult"
   ],
   "latestEloSheetId": "1mglJvzsQTld-0FUokruPam2bfvYBUxYl",
-  "note": "V39: 3050ELO Apps Script는 절대 수정하지 않고, 공개 Google Sheet CSV를 읽기 전용으로만 사용. ELO/최근10/종족전/맵전적/상대전적은 최신 ELO 시트에서 조회, 로스터/결과는 프로리그 운영 시트에서 조회."
+  "note": "V40: 최신 ELO Apps Script 웹앱 URL을 읽기 전용으로 우선 시도. 실패하면 기존 공개 CSV 방식 및 로컬 데이터로 fallback. Apps Script/시트에는 쓰기 없음.",
+  "eloApiUrl": "https://script.google.com/macros/s/AKfycbyEdB5q3tsVLrb_GvbDGr4L9qaUfAQHFtP2CQUVodP4b2mtMs5gd87i6xJpyt6Ntn6NPg/exec"
 }

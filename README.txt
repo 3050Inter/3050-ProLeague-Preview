@@ -1,6 +1,5 @@
-3050 Preview Generator V39
-- 최신 3050ELO 시트 읽기 전용 연결
-- Apps Script / 기존 3050 홈페이지 코드 수정 없음
-- 프로리그 운영 시트는 로스터/결과만 읽음
-- 개인리그 BoN 스코어 계산 유지
-- V38 모바일 UI 유지
+3050 Preview Generator V40
+- 최신 ELO Apps Script URL 읽기 전용 우선 시도
+- CSV fallback
+- Apps Script/Google Sheet 쓰기 없음
+- V39 기능 유지
