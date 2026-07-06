@@ -894,7 +894,7 @@ function renderPreviews(){
   const c=calc(), hr=$('homePreview'), ar=$('awayPreview'); hr.innerHTML=''; ar.innerHTML='';
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
-  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV35: 팀전 + 개인리그 BoN 지원 / 숫자 닉네임 보존`;
+  $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV36: 개인리그 전체 선수 호출 / 숫자 닉네임 보존`;
 }
 function drawText(ctx,text,x,y,size=28,color='#fff',align='center',weight='700',maxW=9999){ ctx.save(); ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; ctx.textAlign=align; ctx.textBaseline='middle'; while(ctx.measureText(String(text)).width>maxW&&size>10){ size--; ctx.font=`${weight} ${size}px Malgun Gothic, Arial`; } ctx.lineWidth=Math.max(2,Math.floor(size/10)); ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(String(text),x,y); ctx.fillStyle=color; ctx.fillText(String(text),x,y); ctx.restore(); }
 function drawMulti(ctx,lines,x,y,size,color,align='center',gap=1.15,weight='700',maxW=9999){ const lh=size*gap,start=y-(lines.length-1)*lh/2; lines.forEach((t,i)=>drawText(ctx,t,x,start+i*lh,size,color,align,weight,maxW)); }
@@ -1002,15 +1002,25 @@ async function renderCanvas(){
 async function renderAll(){ renderPreviews(); await renderCanvas(); }
 function downloadImage(){ renderCanvas().then(()=>{ const c=calc(); const name=`3050_PREVIEW_${c.ht}_vs_${c.at}_${$('date').value.replaceAll('.','')}_${$('time').value.replace(':','')}.png`; const a=document.createElement('a'); a.download=name; a.href=$('canvas').toDataURL('image/png'); a.click(); }); }
 
-// ===================== V35: 개인리그/다전제 지원 + 숫자 닉네임 보존 =====================
+// ===================== V36: 개인리그 전체 선수 호출 + 숫자 닉네임 보존 =====================
 function isIndividualMode(){ return $('matchMode')?.value === 'individual'; }
 function boLimit(){ const m = displayName($('bo')?.value || 'Bo7').match(/(\d+)/); const n = m ? Math.max(1, +m[1]) : 7; return Math.min(7, n); }
 function winsNeeded(){ return Math.floor(boLimit()/2) + 1; }
+function allPlayerNames(){
+  const seen = new Set();
+  return Object.values(PLAYERS || {})
+    .map(p=>p.name)
+    .filter(Boolean)
+    .filter(n => { const k=playerKey(n); if(seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a,b)=>a.localeCompare(b));
+}
 function refreshPlayerList(){
   const dl = $('playerList'); if(!dl) return;
-  const names = Object.values(PLAYERS || {}).map(p=>p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  const names = allPlayerNames();
   dl.innerHTML = names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
 }
+function personalA(){ return cleanPlayerName($('playerA')?.value || $(`h1`)?.value || '') || 'PLAYER A'; }
+function personalB(){ return cleanPlayerName($('playerB')?.value || $(`a1`)?.value || '') || 'PLAYER B'; }
 function setModeVisibility(){
   const ind = isIndividualMode();
   if($('individualBox')) $('individualBox').style.display = ind ? 'block' : 'none';
@@ -1055,7 +1065,12 @@ function buildUI(){
     tb.appendChild(tr); state.sets.push(i);
   }
   updateMapSelects(); updateTeamPlayers(); setModeVisibility();
-  document.querySelectorAll('select,input').forEach(e => e.addEventListener('change', () => { if(e.id==='homeTeam'||e.id==='awayTeam'||e.id==='matchMode'||e.id==='playerA'||e.id==='playerB'||e.id==='bo') updateTeamPlayers(); setModeVisibility(); renderAll(); }));
+  document.querySelectorAll('select,input').forEach(e => e.addEventListener('change', () => {
+    if(isIndividualMode() && e.id && /^h\d+$/.test(e.id) && $('playerA')) $('playerA').value = e.value;
+    if(isIndividualMode() && e.id && /^a\d+$/.test(e.id) && $('playerB')) $('playerB').value = e.value;
+    if(e.id==='homeTeam'||e.id==='awayTeam'||e.id==='matchMode'||e.id==='playerA'||e.id==='playerB'||e.id==='bo'||/^h\d+$/.test(e.id)||/^a\d+$/.test(e.id)) updateTeamPlayers();
+    setModeVisibility(); renderAll();
+  }));
   $('syncBtn').onclick = syncAll;
   $('reloadBtn').onclick = async () => { try{ log('S11Roaster 다시 읽는 중...'); const r=await syncTeamRosters(); log(`[팀 로스터]\n${r.join('\n')}`, 'good'); renderAll(); } catch(e){ log(`로스터 다시읽기 실패: ${e.message}`, 'warn'); } };
   $('generateBtn').onclick = downloadImage;
@@ -1069,11 +1084,19 @@ function updateTeamPlayers(){
   const ht=$('homeTeam')?.value, at=$('awayTeam')?.value;
   const hp=ROSTERS[ht]?.players || [], ap=ROSTERS[at]?.players || [];
   if(ind){
-    const a = cleanPlayerName($('playerA')?.value || '') || 'PLAYER A';
-    const b = cleanPlayerName($('playerB')?.value || '') || 'PLAYER B';
-    for(let i=1;i<=7;i++){ fillSelect($(`h${i}`), [a], a); fillSelect($(`a${i}`), [b], b); }
-    if($('homeInfo')) $('homeInfo').innerHTML=`개인리그 선수 A: ${a}<br>팀 로스터와 무관하게 MASTER DB/ELO에서 조회`;
-    if($('awayInfo')) $('awayInfo').innerHTML=`개인리그 선수 B: ${b}<br>Bo${boLimit()} / ${winsNeeded()}선승`;
+    const names = allPlayerNames();
+    const currentA = cleanPlayerName($('playerA')?.value || $(`h1`)?.value || names[0] || 'PLAYER A');
+    const currentB = cleanPlayerName($('playerB')?.value || $(`a1`)?.value || names[1] || names[0] || 'PLAYER B');
+    const listA = names.length ? names : [currentA];
+    const listB = names.length ? names : [currentB];
+    for(let i=1;i<=7;i++){
+      fillSelect($(`h${i}`), listA, currentA);
+      fillSelect($(`a${i}`), listB, currentB);
+    }
+    if($('playerA') && !cleanPlayerName($('playerA').value) && currentA !== 'PLAYER A') $('playerA').value = currentA;
+    if($('playerB') && !cleanPlayerName($('playerB').value) && currentB !== 'PLAYER B') $('playerB').value = currentB;
+    if($('homeInfo')) $('homeInfo').innerHTML=`개인리그 선수 A: ${currentA}<br>전체 선수 ${names.length}명에서 조회`;
+    if($('awayInfo')) $('awayInfo').innerHTML=`개인리그 선수 B: ${currentB}<br>Bo${boLimit()} / ${winsNeeded()}선승`;
     return;
   }
   for(let i=1;i<=7;i++){ fillSelect($(`h${i}`), hp, hp[(i-1)%Math.max(hp.length,1)]); fillSelect($(`a${i}`), ap, ap[(i-1)%Math.max(ap.length,1)]); }
@@ -1083,8 +1106,8 @@ function updateTeamPlayers(){
 function calc(){
   const ind = isIndividualMode();
   const limit = ind ? boLimit() : 6;
-  const ht = ind ? (cleanPlayerName($('playerA')?.value)||'PLAYER A') : ($('homeTeam')?.value || OFFICIAL_TEAMS[0]);
-  const at = ind ? (cleanPlayerName($('playerB')?.value)||'PLAYER B') : ($('awayTeam')?.value || OFFICIAL_TEAMS[1]);
+  const ht = ind ? personalA() : ($('homeTeam')?.value || OFFICIAL_TEAMS[0]);
+  const at = ind ? personalB() : ($('awayTeam')?.value || OFFICIAL_TEAMS[1]);
   let homeScore=0, awayScore=0, rows=[], diffs=[];
   for(let i=1;i<=limit;i++){
     const hn = ind ? ht : ($(`h${i}`)?.value || '');
@@ -1105,9 +1128,9 @@ function renderPreviews(){
   c.rows.forEach(r => { hr.innerHTML+=`<tr><td style="color:${CFG.colors.home};font-weight:800">${r.h.name}</td><td>${r.h.tier} / ${r.h.race}</td><td>${r.h.elo}</td><td>${r.h.recent}</td></tr>`; ar.innerHTML+=`<tr><td style="color:${CFG.colors.away};font-weight:800">${r.a.name}</td><td>${r.a.tier} / ${r.a.race}</td><td>${r.a.elo}</td><td>${r.a.recent}</td></tr>`; });
   $('metaDate').textContent=$('date').value; $('metaTime').textContent=$('time').value; $('metaBo').textContent=$('bo').value;
   if(c.individual){
-    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV35: 개인리그 다전제 + 숫자 닉네임 보존`;
+    $('calcPreview').innerHTML=`개인리그 Bo${boLimit()} / ${winsNeeded()}선승\n시리즈 승률: <b>${c.ht} ${c.series.homePct}% : ${c.series.awayPct}% ${c.at}</b>\n예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV36: 개인리그 전체 선수 호출 + BoN 지원`;
   }else{
-    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV35: 팀전 + 개인리그 BoN 지원 / 숫자 닉네임 보존`;
+    $('calcPreview').innerHTML=`예상 스코어: <b>${c.ht} ${c.homeScore} : ${c.awayScore} ${c.at}</b>\nBIG MATCH: SET${c.big.set} ${c.big.hn} vs ${c.big.an} (${c.big.hp}:${c.big.ap})\nV36: 개인리그 전체 선수 호출 / 숫자 닉네임 보존`;
   }
 }
 
