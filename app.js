@@ -506,37 +506,72 @@ function rowsToRecent(rows, sheetName){
   return count;
 }
 function parseMaps(rows){
-  // V28: MapDATA 주변의 '프로리그1', '검색' 같은 문구가 맵 목록에 섞이는 문제 방지.
-  // 공식 맵 화이트리스트만 허용하고, 구글시트에 있는 순서를 우선 반영한다.
-  const official = CFG.maps || DEFAULT_MAPS;
+  // 프로리그 맵풀은 MapDATA 시트 기준으로만 읽는다.
+  // 예전 DEFAULT_MAPS/CFG.maps를 화이트리스트로 쓰면 폴스타 누락, 과거 맵 섞임이 생길 수 있어 보충하지 않는다.
   const out = [];
+  const blacklist = /(검색|클랜|공식전|개인전|전적|결과|선수|팀명|팀\s*명|티어|종족|날짜|시간|라운드|set|세트|사용여부|구분|순번|번호|no\.?|name|player|team|race|tier|win|lose|승|패)/i;
+  const headerLike = /^(맵|map|maps|맵\s*이름|map\s*name|전장)$/i;
+  const poolLike = /(프로\s*리그|pro\s*league|team\s*league|s\s*11|시즌\s*11|맵풀|map\s*pool|공식\s*맵|사용\s*맵|현재\s*맵)/i;
+
   const addMap = (value) => {
-    const s = displayName(value);
+    const s = displayName(value).replace(/^[-–—•*\d.\s]+/, '').trim();
     if(!s) return;
-    const found = official.find(m => normalize(m) === normalize(s));
-    if(found && !out.some(x => normalize(x) === normalize(found))) out.push(found);
+    if(s.length < 2 || s.length > 20) return;
+    if(headerLike.test(s)) return;
+    if(blacklist.test(s)) return;
+    if(/^https?:\/\//i.test(s)) return;
+    if(!/[가-힣A-Za-z]/.test(s)) return;
+    if(!out.some(x => normalize(x) === normalize(s))) out.push(s);
   };
 
-  // 1순위: '맵', 'MAP', 'map' 헤더가 있는 열만 먼저 읽기
-  const hi = findHeader(rows, 'map');
-  const headers = (rows[hi] || []).map(displayName);
-  const mapCols = headers
-    .map((h, i) => (/^맵$|맵\s*이름|^map$/i.test(h) ? i : -1))
-    .filter(i => i >= 0);
-  if(mapCols.length){
-    for(let r=hi+1; r<rows.length; r++) mapCols.forEach(c => addMap(rows[r]?.[c]));
+  const h = rows.map(r => (r || []).map(displayName));
+  const width = Math.max(0, ...h.map(r => r.length));
+
+  // 1순위: 헤더나 주변 문맥에 '프로리그/맵풀/현재맵'이 있는 열만 읽는다.
+  for(let r=0; r<h.length; r++){
+    for(let c=0; c<width; c++){
+      const cell = h[r]?.[c] || '';
+      const right = h[r]?.[c+1] || '';
+      const left = h[r]?.[c-1] || '';
+      const above = h[r-1]?.[c] || '';
+      const below = h[r+1]?.[c] || '';
+      const ctx = [cell,right,left,above,below].join(' ');
+      if(poolLike.test(ctx) && (headerLike.test(cell) || headerLike.test(right) || /맵풀|map\s*pool|공식\s*맵|사용\s*맵|현재\s*맵/i.test(cell))){
+        const cols = [];
+        if(headerLike.test(cell) || /맵풀|map\s*pool|공식\s*맵|사용\s*맵|현재\s*맵/i.test(cell)) cols.push(c);
+        if(headerLike.test(right)) cols.push(c+1);
+        cols.forEach(col => {
+          for(let rr=r+1; rr<h.length; rr++) addMap(h[rr]?.[col]);
+          for(let cc=col+1; cc<Math.min(width, col+8); cc++) addMap(h[r]?.[cc]);
+        });
+      }
+    }
   }
 
-  // 2순위: 헤더 열에서 충분히 못 찾으면 전체 셀 중 공식맵과 정확히 일치하는 값만 읽기
+  // 2순위: '프로리그'가 적힌 행의 오른쪽 값을 맵풀로 본다.
   if(out.length < 3){
-    rows.flat().forEach(addMap);
+    for(let r=0; r<h.length; r++){
+      const rowText = (h[r] || []).join(' ');
+      if(poolLike.test(rowText)){
+        for(let c=0; c<width; c++) addMap(h[r]?.[c]);
+        for(let rr=r+1; rr<Math.min(h.length, r+15); rr++) for(let c=0; c<width; c++) addMap(h[rr]?.[c]);
+        if(out.length >= 3) break;
+      }
+    }
   }
 
-  // 3순위: 빠진 공식맵은 기본 목록 순서대로 보충. 특히 폴스타 누락 방지.
-  official.forEach(addMap);
+  // 3순위: 정확한 '맵/MAP' 헤더 열. 단, 이 경우도 시트값만 사용하고 기본맵 보충은 하지 않는다.
+  if(out.length < 3){
+    const hi = findHeader(rows, 'map');
+    const headers = (h[hi] || []);
+    const mapCols = headers.map((x,i)=>headerLike.test(x)?i:-1).filter(i=>i>=0);
+    if(mapCols.length){
+      for(let r=hi+1; r<h.length; r++) mapCols.forEach(c => addMap(h[r]?.[c]));
+    }
+  }
+
   return out;
 }
-
 function infoOf(name){ return PLAYERS[playerKey(name)] || { name:cleanPlayerName(name), tier:'-', race:'-', elo:1500, recent:'0승 0패', recentGames:[], raceRecord:'0승\n0패', mapRecord:'0승 0패' }; }
 function prob(homeElo, awayElo){
   homeElo=Number(homeElo)||1500; awayElo=Number(awayElo)||1500;
@@ -863,8 +898,8 @@ async function syncMaps(report){
     try{ const rows = await fetchSheet(CFG.mapSheet, CFG.teamSheetId); maps = parseMaps(rows); report.push(`[맵] ${CFG.mapSheet}: ${maps.length}개`); }
     catch(e){ report.push(`[맵] ${CFG.mapSheet}: 실패(${e.message})`); }
   }
-  if(maps.length >= 3){ CFG.maps = maps.includes('애티튜드') ? maps : [...maps, '애티튜드']; }
-  else { CFG.maps = CFG.maps || DEFAULT_MAPS; if(!CFG.maps.includes('애티튜드')) CFG.maps.push('애티튜드'); }
+  if(maps.length >= 3){ CFG.maps = maps; report.push(`[맵풀] ${maps.join(', ')}`); }
+  else { CFG.maps = CFG.maps || DEFAULT_MAPS; report.push(`[맵풀] 시트 맵 부족 → 기본값 사용: ${CFG.maps.join(', ')}`); }
   updateMapSelects();
 }
 async function syncTeamRosters(){
@@ -1104,6 +1139,11 @@ function setModeVisibility(){
   document.querySelectorAll('.teamBox').forEach(el => el.style.opacity = ind ? '0.55' : '1');
   if($('aceMap')) $('aceMap').disabled = ind;
   if($('aceTier')) $('aceTier').disabled = ind;
+  const h7=$('h7'), a7=$('a7'), h7Ace=$('h7Ace'), a7Ace=$('a7Ace');
+  if(h7) h7.style.display = ind ? '' : 'none';
+  if(a7) a7.style.display = ind ? '' : 'none';
+  if(h7Ace) h7Ace.style.display = ind ? 'none' : 'inline-block';
+  if(a7Ace) a7Ace.style.display = ind ? 'none' : 'inline-block';
   updateTeamPlayers();
 }
 function seriesSummary(probs){
@@ -1138,7 +1178,11 @@ function buildUI(){
   const tb=$('setRows'); tb.innerHTML=''; state.sets=[];
   for(let i=1;i<=7;i++){
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select></td><td><select id="a${i}"></select></td>`;
+    if(i === 7){
+      tr.innerHTML=`<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select><span id="h${i}Ace" class="aceLabel">ACE 경기 후 결정</span></td><td><select id="a${i}"></select><span id="a${i}Ace" class="aceLabel">ACE 경기 후 결정</span></td>`;
+    }else{
+      tr.innerHTML=`<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select></td><td><select id="a${i}"></select></td>`;
+    }
     tb.appendChild(tr); state.sets.push(i);
   }
   updateMapSelects(); updateTeamPlayers(); setModeVisibility();
@@ -1176,7 +1220,7 @@ function updateTeamPlayers(){
     if($('awayInfo')) $('awayInfo').innerHTML=`개인리그 선수 B: ${currentB}<br>Bo${boLimit()} / ${winsNeeded()}선승`;
     return;
   }
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 6; i++) {
   const hSel = $(`h${i}`);
   const aSel = $(`a${i}`);
 

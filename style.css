@@ -63,3 +63,5 @@
   .setTable tr{grid-template-columns:48px 1fr;}
   input,select,button{font-size:15px;}
 }
+
+.aceLabel{display:none;font-weight:800;color:#ffd84a;font-size:13px;white-space:nowrap;}

@@ -1,5 +1,5 @@
 {
-  "version": "V41_WebSite",
+  "version": "V42_MAPPOOL_ACE_FIX",
   "sheetId": "1mglJvzsQTld-0FUokruPam2bfvYBUxYl",
   "teamSheetId": "1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE",
   "teamRosterSheet": "S11Roaster",
@@ -62,7 +62,7 @@
     "S11PlayerResult"
   ],
   "latestEloSheetId": "1mglJvzsQTld-0FUokruPam2bfvYBUxYl",
-  "note": "V41: Apps Script는 사용하지 않음. 최신 ELO 시트를 공개 CSV로 읽고 실패하면 기존 ELO 시트로 fallback. 모든 시트는 읽기 전용.",
+  "note": "V42: MapDATA 시트 기준 맵풀 적용, 기본/과거 맵 강제 보충 제거, 팀전 7SET ACE 선수 선택 숨김.",
   "eloApiUrl": "",
   "fallbackSheetId": "1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs"
 }
