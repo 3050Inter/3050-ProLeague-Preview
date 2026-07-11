@@ -958,7 +958,9 @@ async function syncAll(){
 }
 
 function updateMapSelects(){
-  const maps = CFG.maps || DEFAULT_MAPS;
+  // 선택 목록은 현재 리그 공식 맵풀만 사용한다.
+  // 구글시트 MapData는 전적 계산용 데이터이므로 드롭다운을 덮어쓰지 않는다.
+  const maps = DEFAULT_MAPS;
   fillSelect($('aceMap'), maps, $('aceMap')?.value || '매치포인트');
   for(let i=1; i<=7; i++) fillSelect($(`map${i}`), maps, $(`map${i}`)?.value || maps[i-1] || maps[0]);
 }
