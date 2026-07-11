@@ -1292,4 +1292,84 @@ function renderPreviews(){
 const _syncAllV34 = syncAll;
 syncAll = async function(){ await _syncAllV34(); refreshPlayerList(); setModeVisibility(); };
 
-(async function init(){ CFG=await loadJSON('config.json'); buildUI(); await syncAll(); })();
+// V42: duplicate-player guidance and browser-local automatic settings save.
+const SETTINGS_KEY = '3050-preview-settings-v1';
+let settingsSaveTimer = 0;
+const savedSettingIds = [
+  'matchMode','date','time','bj','bo','aceMap','aceTier','playerA','playerB',
+  'homeTeam','awayTeam',
+  ...Array.from({length:7},(_,i)=>`map${i+1}`),
+  ...Array.from({length:7},(_,i)=>`h${i+1}`),
+  ...Array.from({length:7},(_,i)=>`a${i+1}`)
+];
+function readSavedSettings(){
+  try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {}; }
+  catch(_){ return {}; }
+}
+function applySavedSettings(saved=readSavedSettings()){
+  savedSettingIds.forEach(id=>{
+    const el=$(id), value=saved[id];
+    if(!el || value == null) return;
+    if(el.tagName === 'SELECT' && ![...el.options].some(o=>o.value === value)) return;
+    el.value=value;
+  });
+  setModeVisibility();
+}
+function saveSettings(){
+  const data={};
+  savedSettingIds.forEach(id=>{ const el=$(id); if(el) data[id]=el.value; });
+  try{
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
+    document.body.dataset.settingsSaved='true';
+    clearTimeout(settingsSaveTimer);
+    settingsSaveTimer=setTimeout(()=>delete document.body.dataset.settingsSaved, 1200);
+  }catch(_){ /* Private browsing/storage restrictions should not break previews. */ }
+}
+function duplicatePlayerGroups(){
+  if(isIndividualMode()) return [];
+  const picks=[];
+  for(let i=1;i<=6;i++){
+    [['HOME',`h${i}`],['AWAY',`a${i}`]].forEach(([side,id])=>{
+      const name=cleanPlayerName($(id)?.value || '');
+      if(name) picks.push({side,set:i,name,key:playerKey(name),el:$(id)});
+    });
+  }
+  const byKey=new Map();
+  picks.forEach(p=>byKey.set(p.key,[...(byKey.get(p.key)||[]),p]));
+  return [...byKey.values()].filter(group=>group.length>1);
+}
+function updateDuplicatePlayerWarning(){
+  let box=$('duplicatePlayerWarning');
+  if(!box){
+    box=document.createElement('div'); box.id='duplicatePlayerWarning'; box.className='duplicateWarning';
+    $('setRows')?.closest('table')?.insertAdjacentElement('beforebegin',box);
+  }
+  document.querySelectorAll('.duplicatePick').forEach(el=>el.classList.remove('duplicatePick'));
+  const groups=duplicatePlayerGroups();
+  groups.flat().forEach(p=>p.el?.classList.add('duplicatePick'));
+  box.hidden=!groups.length;
+  box.textContent=groups.length ? `⚠ 중복 선수: ${groups.map(g=>`${g[0].name} (${g.map(p=>`${p.side} ${p.set}SET`).join(', ')})`).join(' · ')}` : '';
+  return groups;
+}
+const _renderAllV42=renderAll;
+renderAll=async function(){ updateDuplicatePlayerWarning(); await _renderAllV42(); };
+const _downloadImageV42=downloadImage;
+downloadImage=function(){
+  const duplicates=updateDuplicatePlayerWarning();
+  if(duplicates.length && !window.confirm('같은 선수가 여러 세트에 배치되어 있습니다. 그래도 이미지를 생성할까요?')) return;
+  _downloadImageV42();
+};
+
+(async function init(){
+  CFG=await loadJSON('config.json');
+  buildUI();
+  const saved=readSavedSettings();
+  applySavedSettings(saved);
+  document.addEventListener('input',e=>{ if(e.target.matches('select,input')){ saveSettings(); updateDuplicatePlayerWarning(); } });
+  document.addEventListener('change',e=>{ if(e.target.matches('select,input')){ saveSettings(); updateDuplicatePlayerWarning(); } });
+  await syncAll();
+  applySavedSettings(saved);
+  updateTeamPlayers();
+  applySavedSettings(saved);
+  await renderAll();
+})();
