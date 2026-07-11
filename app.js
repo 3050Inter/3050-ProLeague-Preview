@@ -1210,17 +1210,26 @@ function updateTeamPlayers(){
     const names = allPlayerNames();
     const currentA = cleanPlayerName($('playerA')?.value || $(`h1`)?.value || names[0] || 'PLAYER A');
     const currentB = cleanPlayerName($('playerB')?.value || $(`a1`)?.value || names[1] || names[0] || 'PLAYER B');
-    const listA = names.length ? names : [currentA];
-    const listB = names.length ? names : [currentB];
+    // 개인리그는 모든 세트가 동일한 두 선수의 다전제다. 전체 선수 목록을
+    // 세트 select에 넣으면 동기화 과정에서 전적 문자열이 선수처럼 노출되고,
+    // 저장된 이전 값이 선수 B를 덮어쓸 수 있으므로 각 진영을 한 명으로 고정한다.
+    const listA = [currentA];
+    const listB = [currentB];
     for(let i=1;i<=7;i++){
       fillSelect($(`h${i}`), listA, currentA);
       fillSelect($(`a${i}`), listB, currentB);
+      if($(`h${i}`)) $(`h${i}`).disabled = true;
+      if($(`a${i}`)) $(`a${i}`).disabled = true;
     }
     if($('playerA') && !cleanPlayerName($('playerA').value) && currentA !== 'PLAYER A') $('playerA').value = currentA;
     if($('playerB') && !cleanPlayerName($('playerB').value) && currentB !== 'PLAYER B') $('playerB').value = currentB;
     if($('homeInfo')) $('homeInfo').innerHTML=`개인리그 선수 A: ${currentA}<br>전체 선수 ${names.length}명에서 조회`;
     if($('awayInfo')) $('awayInfo').innerHTML=`개인리그 선수 B: ${currentB}<br>Bo${boLimit()} / ${winsNeeded()}선승`;
     return;
+  }
+  for(let i=1;i<=7;i++){
+    if($(`h${i}`)) $(`h${i}`).disabled = false;
+    if($(`a${i}`)) $(`a${i}`).disabled = false;
   }
   for (let i = 1; i <= 6; i++) {
   const hSel = $(`h${i}`);
