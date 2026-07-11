@@ -3,7 +3,7 @@ let CFG = {}, ROSTERS = {}, PLAYERS = {}, TEMPLATE = null, MATCHES = [], ACTUAL_
 const state = { sets: [] };
 const OFFICIAL_TEAMS = ['Team1k', '외모지상주의', 'JD', 'Team최강파파', 'WorldClass', 'KHAN'];
 const TIERS = ['갓', '킹', '퀸', '잭', '스페이드', '조커', '히든'];
-const DEFAULT_MAPS = ['투혼', '폴스타', '녹아웃', '매치포인트', '실피드', '옥타곤', '폴리포이드', '네오실피드', '라데온', '애티튜드'];
+const DEFAULT_MAPS = ['매치포인트', '네오실피드', '옥타곤', '애티튜드', '녹아웃', '폴스타', '폴리포이드', '투혼'];
 const raceMap = { z:'Z', p:'P', t:'T', '저그':'Z', '프로토스':'P', '토스':'P', '테란':'T', zerg:'Z', protoss:'P', terran:'T' };
 
 const displayName = v => (v ?? '').toString().replace(/[\u00A0\u200B-\u200D\uFEFF]/g, ' ').replace(/[\s　]+/g, ' ').trim();
