@@ -506,72 +506,37 @@ function rowsToRecent(rows, sheetName){
   return count;
 }
 function parseMaps(rows){
-  // 프로리그 맵풀은 MapDATA 시트 기준으로만 읽는다.
-  // 예전 DEFAULT_MAPS/CFG.maps를 화이트리스트로 쓰면 폴스타 누락, 과거 맵 섞임이 생길 수 있어 보충하지 않는다.
+  // V28: MapDATA 주변의 '프로리그1', '검색' 같은 문구가 맵 목록에 섞이는 문제 방지.
+  // 공식 맵 화이트리스트만 허용하고, 구글시트에 있는 순서를 우선 반영한다.
+  const official = CFG.maps || DEFAULT_MAPS;
   const out = [];
-  const blacklist = /(검색|클랜|공식전|개인전|전적|결과|선수|팀명|팀\s*명|티어|종족|날짜|시간|라운드|set|세트|사용여부|구분|순번|번호|no\.?|name|player|team|race|tier|win|lose|승|패)/i;
-  const headerLike = /^(맵|map|maps|맵\s*이름|map\s*name|전장)$/i;
-  const poolLike = /(프로\s*리그|pro\s*league|team\s*league|s\s*11|시즌\s*11|맵풀|map\s*pool|공식\s*맵|사용\s*맵|현재\s*맵)/i;
-
   const addMap = (value) => {
-    const s = displayName(value).replace(/^[-–—•*\d.\s]+/, '').trim();
+    const s = displayName(value);
     if(!s) return;
-    if(s.length < 2 || s.length > 20) return;
-    if(headerLike.test(s)) return;
-    if(blacklist.test(s)) return;
-    if(/^https?:\/\//i.test(s)) return;
-    if(!/[가-힣A-Za-z]/.test(s)) return;
-    if(!out.some(x => normalize(x) === normalize(s))) out.push(s);
+    const found = official.find(m => normalize(m) === normalize(s));
+    if(found && !out.some(x => normalize(x) === normalize(found))) out.push(found);
   };
 
-  const h = rows.map(r => (r || []).map(displayName));
-  const width = Math.max(0, ...h.map(r => r.length));
-
-  // 1순위: 헤더나 주변 문맥에 '프로리그/맵풀/현재맵'이 있는 열만 읽는다.
-  for(let r=0; r<h.length; r++){
-    for(let c=0; c<width; c++){
-      const cell = h[r]?.[c] || '';
-      const right = h[r]?.[c+1] || '';
-      const left = h[r]?.[c-1] || '';
-      const above = h[r-1]?.[c] || '';
-      const below = h[r+1]?.[c] || '';
-      const ctx = [cell,right,left,above,below].join(' ');
-      if(poolLike.test(ctx) && (headerLike.test(cell) || headerLike.test(right) || /맵풀|map\s*pool|공식\s*맵|사용\s*맵|현재\s*맵/i.test(cell))){
-        const cols = [];
-        if(headerLike.test(cell) || /맵풀|map\s*pool|공식\s*맵|사용\s*맵|현재\s*맵/i.test(cell)) cols.push(c);
-        if(headerLike.test(right)) cols.push(c+1);
-        cols.forEach(col => {
-          for(let rr=r+1; rr<h.length; rr++) addMap(h[rr]?.[col]);
-          for(let cc=col+1; cc<Math.min(width, col+8); cc++) addMap(h[r]?.[cc]);
-        });
-      }
-    }
+  // 1순위: '맵', 'MAP', 'map' 헤더가 있는 열만 먼저 읽기
+  const hi = findHeader(rows, 'map');
+  const headers = (rows[hi] || []).map(displayName);
+  const mapCols = headers
+    .map((h, i) => (/^맵$|맵\s*이름|^map$/i.test(h) ? i : -1))
+    .filter(i => i >= 0);
+  if(mapCols.length){
+    for(let r=hi+1; r<rows.length; r++) mapCols.forEach(c => addMap(rows[r]?.[c]));
   }
 
-  // 2순위: '프로리그'가 적힌 행의 오른쪽 값을 맵풀로 본다.
+  // 2순위: 헤더 열에서 충분히 못 찾으면 전체 셀 중 공식맵과 정확히 일치하는 값만 읽기
   if(out.length < 3){
-    for(let r=0; r<h.length; r++){
-      const rowText = (h[r] || []).join(' ');
-      if(poolLike.test(rowText)){
-        for(let c=0; c<width; c++) addMap(h[r]?.[c]);
-        for(let rr=r+1; rr<Math.min(h.length, r+15); rr++) for(let c=0; c<width; c++) addMap(h[rr]?.[c]);
-        if(out.length >= 3) break;
-      }
-    }
+    rows.flat().forEach(addMap);
   }
 
-  // 3순위: 정확한 '맵/MAP' 헤더 열. 단, 이 경우도 시트값만 사용하고 기본맵 보충은 하지 않는다.
-  if(out.length < 3){
-    const hi = findHeader(rows, 'map');
-    const headers = (h[hi] || []);
-    const mapCols = headers.map((x,i)=>headerLike.test(x)?i:-1).filter(i=>i>=0);
-    if(mapCols.length){
-      for(let r=hi+1; r<h.length; r++) mapCols.forEach(c => addMap(h[r]?.[c]));
-    }
-  }
-
+  // 3순위: 빠진 공식맵은 기본 목록 순서대로 보충. 특히 폴스타 누락 방지.
+  official.forEach(addMap);
   return out;
 }
+
 function infoOf(name){ return PLAYERS[playerKey(name)] || { name:cleanPlayerName(name), tier:'-', race:'-', elo:1500, recent:'0승 0패', recentGames:[], raceRecord:'0승\n0패', mapRecord:'0승 0패' }; }
 function prob(homeElo, awayElo){
   homeElo=Number(homeElo)||1500; awayElo=Number(awayElo)||1500;
@@ -893,13 +858,10 @@ function buildAnalysisReport(){
 }
 
 async function syncMaps(report){
-  let maps = [];
-  if(CFG.mapSheet){
-    try{ const rows = await fetchSheet(CFG.mapSheet, CFG.teamSheetId); maps = parseMaps(rows); report.push(`[맵] ${CFG.mapSheet}: ${maps.length}개`); }
-    catch(e){ report.push(`[맵] ${CFG.mapSheet}: 실패(${e.message})`); }
-  }
-  if(maps.length >= 3){ CFG.maps = maps; report.push(`[맵풀] ${maps.join(', ')}`); }
-  else { CFG.maps = CFG.maps || DEFAULT_MAPS; report.push(`[맵풀] 시트 맵 부족 → 기본값 사용: ${CFG.maps.join(', ')}`); }
+  // 현재 시즌 공식 맵풀 8개만 고정 사용합니다.
+  // 선수/ELO/전적 데이터 동기화 로직은 기존 V41 그대로 유지합니다.
+  CFG.maps = [...DEFAULT_MAPS];
+  report.push(`[맵풀] 고정 8개: ${CFG.maps.join(', ')}`);
   updateMapSelects();
 }
 async function syncTeamRosters(){
@@ -958,9 +920,7 @@ async function syncAll(){
 }
 
 function updateMapSelects(){
-  // 선택 목록은 현재 리그 공식 맵풀만 사용한다.
-  // 구글시트 MapData는 전적 계산용 데이터이므로 드롭다운을 덮어쓰지 않는다.
-  const maps = DEFAULT_MAPS;
+  const maps = CFG.maps || DEFAULT_MAPS;
   fillSelect($('aceMap'), maps, $('aceMap')?.value || '매치포인트');
   for(let i=1; i<=7; i++) fillSelect($(`map${i}`), maps, $(`map${i}`)?.value || maps[i-1] || maps[0]);
 }
@@ -1180,11 +1140,9 @@ function buildUI(){
   const tb=$('setRows'); tb.innerHTML=''; state.sets=[];
   for(let i=1;i<=7;i++){
     const tr=document.createElement('tr');
-    if(i === 7){
-      tr.innerHTML=`<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select><span id="h${i}Ace" class="aceLabel">ACE 경기 후 결정</span></td><td><select id="a${i}"></select><span id="a${i}Ace" class="aceLabel">ACE 경기 후 결정</span></td>`;
-    }else{
-      tr.innerHTML=`<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select></td><td><select id="a${i}"></select></td>`;
-    }
+    tr.innerHTML = i===7
+      ? `<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select><span id="h${i}Ace" class="aceLabel">ACE 경기 후 결정</span></td><td><select id="a${i}"></select><span id="a${i}Ace" class="aceLabel">ACE 경기 후 결정</span></td>`
+      : `<td>${i}SET</td><td><select id="map${i}"></select></td><td><select id="h${i}"></select></td><td><select id="a${i}"></select></td>`;
     tb.appendChild(tr); state.sets.push(i);
   }
   updateMapSelects(); updateTeamPlayers(); setModeVisibility();
@@ -1210,16 +1168,11 @@ function updateTeamPlayers(){
     const names = allPlayerNames();
     const currentA = cleanPlayerName($('playerA')?.value || $(`h1`)?.value || names[0] || 'PLAYER A');
     const currentB = cleanPlayerName($('playerB')?.value || $(`a1`)?.value || names[1] || names[0] || 'PLAYER B');
-    // 개인리그는 모든 세트가 동일한 두 선수의 다전제다. 전체 선수 목록을
-    // 세트 select에 넣으면 동기화 과정에서 전적 문자열이 선수처럼 노출되고,
-    // 저장된 이전 값이 선수 B를 덮어쓸 수 있으므로 각 진영을 한 명으로 고정한다.
-    const listA = [currentA];
-    const listB = [currentB];
+    const listA = names.length ? names : [currentA];
+    const listB = names.length ? names : [currentB];
     for(let i=1;i<=7;i++){
       fillSelect($(`h${i}`), listA, currentA);
       fillSelect($(`a${i}`), listB, currentB);
-      if($(`h${i}`)) $(`h${i}`).disabled = true;
-      if($(`a${i}`)) $(`a${i}`).disabled = true;
     }
     if($('playerA') && !cleanPlayerName($('playerA').value) && currentA !== 'PLAYER A') $('playerA').value = currentA;
     if($('playerB') && !cleanPlayerName($('playerB').value) && currentB !== 'PLAYER B') $('playerB').value = currentB;
@@ -1227,11 +1180,7 @@ function updateTeamPlayers(){
     if($('awayInfo')) $('awayInfo').innerHTML=`개인리그 선수 B: ${currentB}<br>Bo${boLimit()} / ${winsNeeded()}선승`;
     return;
   }
-  for(let i=1;i<=7;i++){
-    if($(`h${i}`)) $(`h${i}`).disabled = false;
-    if($(`a${i}`)) $(`a${i}`).disabled = false;
-  }
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 7; i++) {
   const hSel = $(`h${i}`);
   const aSel = $(`a${i}`);
 
@@ -1301,84 +1250,4 @@ function renderPreviews(){
 const _syncAllV34 = syncAll;
 syncAll = async function(){ await _syncAllV34(); refreshPlayerList(); setModeVisibility(); };
 
-// V42: duplicate-player guidance and browser-local automatic settings save.
-const SETTINGS_KEY = '3050-preview-settings-v1';
-let settingsSaveTimer = 0;
-const savedSettingIds = [
-  'matchMode','date','time','bj','bo','aceMap','aceTier','playerA','playerB',
-  'homeTeam','awayTeam',
-  ...Array.from({length:7},(_,i)=>`map${i+1}`),
-  ...Array.from({length:7},(_,i)=>`h${i+1}`),
-  ...Array.from({length:7},(_,i)=>`a${i+1}`)
-];
-function readSavedSettings(){
-  try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {}; }
-  catch(_){ return {}; }
-}
-function applySavedSettings(saved=readSavedSettings()){
-  savedSettingIds.forEach(id=>{
-    const el=$(id), value=saved[id];
-    if(!el || value == null) return;
-    if(el.tagName === 'SELECT' && ![...el.options].some(o=>o.value === value)) return;
-    el.value=value;
-  });
-  setModeVisibility();
-}
-function saveSettings(){
-  const data={};
-  savedSettingIds.forEach(id=>{ const el=$(id); if(el) data[id]=el.value; });
-  try{
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
-    document.body.dataset.settingsSaved='true';
-    clearTimeout(settingsSaveTimer);
-    settingsSaveTimer=setTimeout(()=>delete document.body.dataset.settingsSaved, 1200);
-  }catch(_){ /* Private browsing/storage restrictions should not break previews. */ }
-}
-function duplicatePlayerGroups(){
-  if(isIndividualMode()) return [];
-  const picks=[];
-  for(let i=1;i<=6;i++){
-    [['HOME',`h${i}`],['AWAY',`a${i}`]].forEach(([side,id])=>{
-      const name=cleanPlayerName($(id)?.value || '');
-      if(name) picks.push({side,set:i,name,key:playerKey(name),el:$(id)});
-    });
-  }
-  const byKey=new Map();
-  picks.forEach(p=>byKey.set(p.key,[...(byKey.get(p.key)||[]),p]));
-  return [...byKey.values()].filter(group=>group.length>1);
-}
-function updateDuplicatePlayerWarning(){
-  let box=$('duplicatePlayerWarning');
-  if(!box){
-    box=document.createElement('div'); box.id='duplicatePlayerWarning'; box.className='duplicateWarning';
-    $('setRows')?.closest('table')?.insertAdjacentElement('beforebegin',box);
-  }
-  document.querySelectorAll('.duplicatePick').forEach(el=>el.classList.remove('duplicatePick'));
-  const groups=duplicatePlayerGroups();
-  groups.flat().forEach(p=>p.el?.classList.add('duplicatePick'));
-  box.hidden=!groups.length;
-  box.textContent=groups.length ? `⚠ 중복 선수: ${groups.map(g=>`${g[0].name} (${g.map(p=>`${p.side} ${p.set}SET`).join(', ')})`).join(' · ')}` : '';
-  return groups;
-}
-const _renderAllV42=renderAll;
-renderAll=async function(){ updateDuplicatePlayerWarning(); await _renderAllV42(); };
-const _downloadImageV42=downloadImage;
-downloadImage=function(){
-  const duplicates=updateDuplicatePlayerWarning();
-  if(duplicates.length && !window.confirm('같은 선수가 여러 세트에 배치되어 있습니다. 그래도 이미지를 생성할까요?')) return;
-  _downloadImageV42();
-};
-
-(async function init(){
-  CFG=await loadJSON('config.json');
-  buildUI();
-  const saved=readSavedSettings();
-  applySavedSettings(saved);
-  document.addEventListener('input',e=>{ if(e.target.matches('select,input')){ saveSettings(); updateDuplicatePlayerWarning(); } });
-  document.addEventListener('change',e=>{ if(e.target.matches('select,input')){ saveSettings(); updateDuplicatePlayerWarning(); } });
-  await syncAll();
-  applySavedSettings(saved);
-  updateTeamPlayers();
-  applySavedSettings(saved);
-  await renderAll();
-})();
+(async function init(){ CFG=await loadJSON('config.json'); buildUI(); await syncAll(); })();
